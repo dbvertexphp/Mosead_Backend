@@ -30,25 +30,24 @@ app.use("/api/message", messageRoutes);
 
 const __dirname1 = path.resolve();
 
-if (process.env.NODE_ENV === "production") {
-  app.use(express.static(path.join(__dirname1, "/frontend/build")));
+if (process.env.NODE_ENV == "production") {
+      app.use(express.static(path.join(__dirname1, "/view")));
 
-  app.get("*", (req, res) =>
-    res.sendFile(path.resolve(__dirname1, "frontend", "build", "index.html"))
-  );
-} else {
-  app.get("/", (req, res) => {
-    res.send("API is running..");
-  });
-}
+      app.get("*", (req, res) => res.sendFile(path.resolve(__dirname1, "view", "index.html")));
+    } else {
+      app.get("/", (req, res) => {
+        res.send("API is running..");
+      });
+    }
 
 // --------------------------deployment------------------------------
 
 // Error Handling middlewares
-app.use(notFound);
+//app.use(notFound);
 app.use(errorHandler);
 
 const PORT = process.env.PORT;
+
 
 const server = app.listen(
   PORT,
