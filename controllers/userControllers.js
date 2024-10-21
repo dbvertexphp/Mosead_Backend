@@ -5,7 +5,6 @@ const upload = require("../middleware/uploadMiddleware.js");
 const { createConnectyCubeUser } = require("../utils/connectyCubeUtils.js");
 const cookie = require("cookie");
 
-
 const allUsers = asyncHandler(async (req, res) => {
   const keyword = req.query.search
     ? {
@@ -49,10 +48,12 @@ const registerUser = asyncHandler(async (req, res) => {
       _id: user._id,
       phone: user.phone,
       otp_verified: user.otp_verified,
-      otp: user.otp,
+      temp_otp: user.otp,
       country_code: user.country_code,
       isAdmin: user.isAdmin,
       token: generateToken(user._id, user.role),
+      status: true,
+      message: "User registered successfully",
     });
   } else {
     res.status(400);
@@ -119,6 +120,7 @@ const verifyOtp = asyncHandler(async (req, res) => {
       user: updatedUser,
       token: authToken,
       status: true,
+      message: "OTP Verify successfully",
     });
   } catch (error) {
     throw new Error(error.message, 500);
@@ -156,26 +158,29 @@ const resendOTP = asyncHandler(async (req, res) => {
 });
 
 const getUserById = asyncHandler(async (req, res) => {
-      const userId = req.headers.userID; // Get user ID from URL parameters
+  const userId = req.headers.userID; // Get user ID from URL parameters
 
-      // Find the user by ID
-      const user = await User.findById(userId); // Exclude password from the response
+  // Find the user by ID
+  const user = await User.findById(userId); // Exclude password from the response
 
-      if (!user) {
-        res.status(404);
-        throw new Error("User not found");
-      }
+  if (!user) {
+    res.status(404);
+    throw new Error("User not found");
+  }
 
-      res.status(200).json({
-        _id: user._id,
-        name: user.name,
-        about: user.about,
-        phone: user.phone,
-        otp_verified: user.otp_verified,
-        country_code: user.country_code,
-        isAdmin: user.isAdmin,
-        cb_id: user.cb_id, // Include cb_id in the response if needed
-      });
+  res.status(200).json({
+    _id: user._id,
+    name: user.name,
+    about: user.about,
+    number: user.phone,
+    profile_pic : user.profile_pic,
+    otp_verified: user.otp_verified,
+    country_code: user.country_code,
+    isAdmin: user.isAdmin,
+    cb_id: user.cb_id,
+    status: true,
+    message: "Fetch User Details successfully",
+  });
 });
 
 const updateProfile = asyncHandler(async (req, res) => {
@@ -186,7 +191,6 @@ const updateProfile = asyncHandler(async (req, res) => {
     res.status(401);
     throw new Error("User not authorized");
   }
-
 
   // Find the user by ID
   const user = await User.findById(userId);
@@ -241,30 +245,32 @@ const updateProfile = asyncHandler(async (req, res) => {
     isAdmin: updatedUser.isAdmin,
     cb_id: updatedUser.cb_id, // Include cb_id in the response if needed
     token: generateToken(updatedUser._id, updatedUser.role), // Generate token if needed
+    status: true,
+    message: "User details update successfully",
   });
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
-      const authHeader = req.headers.authorization;
+  const authHeader = req.headers.authorization;
 
-      if (authHeader) {
-        const token = authHeader.split(" ")[1]; // Extract token from "Bearer {token}"
+  if (authHeader) {
+    const token = authHeader.split(" ")[1]; // Extract token from "Bearer {token}"
 
-        // Expire the cookie immediately
-        res.setHeader(
-          "Set-Cookie",
-          cookie.serialize("Websitetoken", "", {
-            httpOnly: true, // Set to true for security
-            expires: new Date(0), // Set the expiration date to the past
-            path: "/", // Specify the path for the cookie
-          })
-        );
+    // Expire the cookie immediately
+    res.setHeader(
+      "Set-Cookie",
+      cookie.serialize("Websitetoken", "", {
+        httpOnly: true, // Set to true for security
+        expires: new Date(0), // Set the expiration date to the past
+        path: "/", // Specify the path for the cookie
+      })
+    );
 
-        return res.json({ message: "Logout successful", status: true });
-      } else {
-        return res.status(401).json({ message: "Invalid token", status: false });
-      }
-    });
+    return res.json({ message: "Logout successful", status: true });
+  } else {
+    return res.status(401).json({ message: "Invalid token", status: false });
+  }
+});
 
 function generateOTP() {
   const min = 1000; // Minimum 4-digit number
@@ -304,5 +310,5 @@ module.exports = {
   resendOTP,
   updateProfile,
   getUserById,
-  logoutUser
+  logoutUser,
 };
