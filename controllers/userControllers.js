@@ -27,31 +27,26 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new Error("Please Enter Phone number or country_code");
   }
 
-  const userExists = await User.findOne({ phone });
+  const user = await User.findOne({ phone });
 
-  if (userExists) {
-    res.status(400);
-    throw new Error("User already exists");
+  const otp = generateOTP(); // Generate a new OTP regardless of user existence
+
+  if (user) {
+    // If the user exists, update the OTP
+    user.otp = otp; // Update the OTP
+    await user.save(); // Save the updated user document
+  } else {
+    // If the user doesn't exist, create a new one with a new OTP
+    user = await User.create({
+      phone,
+      otp,
+      country_code,
+    });
   }
-
-  // Generate a 4-digit random OTP
-  const otp = generateOTP();
-
-  const user = await User.create({
-    phone,
-    otp,
-    country_code,
-  });
 
   if (user) {
     res.status(201).json({
-      _id: user._id,
-      phone: user.phone,
-      otp_verified: user.otp_verified,
       temp_otp: user.otp,
-      country_code: user.country_code,
-      isAdmin: user.isAdmin,
-      token: generateToken(user._id, user.role),
       status: true,
       message: "User registered successfully",
     });
@@ -66,7 +61,6 @@ const verifyOtp = asyncHandler(async (req, res) => {
 
   try {
     const user = await User.findOne({ phone });
-    console.log(user);
 
     if (!user) {
       throw new Error("User Not Found. ", 400);
@@ -80,8 +74,6 @@ const verifyOtp = asyncHandler(async (req, res) => {
     if (user.otp !== otp) {
       throw new Error("Invalid OTP.", 400);
     }
-
-    //     const { id } = await createConnectyCubeUser(phone, user.name, user.role);
 
     // Update the user's otp_verified field to 1 (OTP verified)
     const result = await User.updateOne(
@@ -255,6 +247,11 @@ const logoutUser = asyncHandler(async (req, res) => {
 
   if (authHeader) {
     const token = authHeader.split(" ")[1]; // Extract token from "Bearer {token}"
+
+    const userId = req.headers.userID;
+    console.log(userId);
+
+    await User.updateOne({ _id: userId }, { $set: { otp_verified: 0 } });
 
     // Expire the cookie immediately
     res.setHeader(

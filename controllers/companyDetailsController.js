@@ -187,7 +187,7 @@ const submitReport = asyncHandler(async (req, res) => {
   res.status(201).json({
     message: "Report submitted successfully",
     status: true,
-    report: savedReport,
+    data: savedReport,
   });
 });
 
@@ -215,7 +215,7 @@ const addFAQ = asyncHandler(async (req, res) => {
 });
 
 const getFAQs = asyncHandler(async (req, res) => {
-  const faqs = await companyDetailsModel.FAQ.find({});
+  const faqs = await companyDetailsModel.FAQ.findOne();
   if (faqs) {
     res.status(201).json({
       _id: faqs._id,
