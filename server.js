@@ -58,7 +58,7 @@ const server = app.listen(
 const io = require("socket.io")(server, {
   pingTimeout: 60000,
   cors: {
-    origin: "http://localhost:3000",
+    origin: process.env.BASE_URL,
     // credentials: true,
   },
 });
@@ -66,9 +66,10 @@ const io = require("socket.io")(server, {
 io.on("connection", (socket) => {
   console.log("Connected to socket.io");
   socket.on("setup", (userData) => {
+      console.log(userData);
     socket.join(userData._id);
     socket.emit("connected");
-  });
+});
 
   socket.on("join chat", (room) => {
     socket.join(room);

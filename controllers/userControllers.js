@@ -66,10 +66,6 @@ const verifyOtp = asyncHandler(async (req, res) => {
       throw new Error("User Not Found. ", 400);
     }
 
-    if (user.otp_verified) {
-      throw new Error("User is already OTP verified.", 400);
-    }
-
     // Check if the provided OTP matches the OTP in the user document
     if (user.otp !== otp) {
       throw new Error("Invalid OTP.", 400);
@@ -144,13 +140,14 @@ const resendOTP = asyncHandler(async (req, res) => {
 
   res.json({
     message: "New OTP sent successfully.",
-    newOTP,
+    temp_otp: newOTP,
     status: true,
   });
 });
 
 const getUserById = asyncHandler(async (req, res) => {
-  const userId = req.headers.userID; // Get user ID from URL parameters
+  const { uid } = req.body;
+  const userId = uid || req.headers.userID; // Get user ID from URL parameters
 
   // Find the user by ID
   const user = await User.findById(userId); // Exclude password from the response
@@ -161,15 +158,7 @@ const getUserById = asyncHandler(async (req, res) => {
   }
 
   res.status(200).json({
-    _id: user._id,
-    name: user.name,
-    about: user.about,
-    number: user.phone,
-    profile_pic : user.profile_pic,
-    otp_verified: user.otp_verified,
-    country_code: user.country_code,
-    isAdmin: user.isAdmin,
-    cb_id: user.cb_id,
+    data: user,
     status: true,
     message: "Fetch User Details successfully",
   });
@@ -299,6 +288,38 @@ const authUser = asyncHandler(async (req, res) => {
   }
 });
 
+const getUserDetailsByPhones = asyncHandler(async (req, res) => {
+  const { numbers } = req.body;
+
+  if (!Array.isArray(numbers) || numbers.length === 0) {
+    res.status(400);
+    throw new Error("Please provide an array of phone numbers.");
+  }
+
+  try {
+    // Use $in to find users with phone numbers in the provided array
+    const users = await User.find({ phone: { $in: numbers } });
+
+    if (users.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "No users found for the provided phone numbers.",
+        data: [],
+      });
+    }
+
+    // Return user details
+    res.status(200).json({
+      status: true,
+      message: "Users retrieved successfully.",
+      data: users,
+    });
+  } catch (error) {
+    console.error("Error fetching users:", error.message);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
 module.exports = {
   allUsers,
   registerUser,
@@ -308,4 +329,5 @@ module.exports = {
   updateProfile,
   getUserById,
   logoutUser,
+  getUserDetailsByPhones
 };

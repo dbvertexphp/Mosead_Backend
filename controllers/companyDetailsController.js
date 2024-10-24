@@ -215,18 +215,25 @@ const addFAQ = asyncHandler(async (req, res) => {
 });
 
 const getFAQs = asyncHandler(async (req, res) => {
-  const faqs = await companyDetailsModel.FAQ.findOne();
-  if (faqs) {
-    res.status(201).json({
-      _id: faqs._id,
-      q: faqs.question,
-      a: faqs.answer,
+  const FAQs = await companyDetailsModel.FAQ.find();
+
+  if (FAQs && FAQs.length > 0) {
+    const formattedFAQs = FAQs.map((faq) => ({
+      id: faq._id,
+      q: faq.question,
+      a: faq.answer,
+    }));
+
+    res.status(200).json({
+      FAQ: formattedFAQs,
       status: true,
-      message: "Fetch faq successfully",
+      message: "FAQs fetched successfully",
     });
   } else {
-    res.status(400);
-    throw new Error("FAQ not found");
+    res.status(404).json({
+      status: false,
+      message: "No FAQs found",
+    });
   }
 });
 
