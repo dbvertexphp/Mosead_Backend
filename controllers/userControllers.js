@@ -149,6 +149,7 @@ const getUserById = asyncHandler(async (req, res) => {
   const { uid } = req.body;
   const userId = uid || req.headers.userID; // Get user ID from URL parameters
 
+
   // Find the user by ID
   const user = await User.findById(userId); // Exclude password from the response
 
@@ -158,7 +159,7 @@ const getUserById = asyncHandler(async (req, res) => {
   }
 
   res.status(200).json({
-    data: user,
+    user,
     status: true,
     message: "Fetch User Details successfully",
   });
