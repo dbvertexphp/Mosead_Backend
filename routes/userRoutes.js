@@ -23,7 +23,7 @@ router.route("/setUserData").post(protect ,updateProfile);
 router.route("/getUserData").post(protect, getUserById);
 router.route("/getAllUsers").get(protect, allUsers);
 router.route("/logout").post(protect, logoutUser);
-router.route("/auth/getUserDetailsByPhones").post(getUserDetailsByPhones);
+router.route("/auth/getUserDetailsByPhones").post(protect, getUserDetailsByPhones);
 
 
 module.exports = router;

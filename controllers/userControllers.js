@@ -27,7 +27,7 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new Error("Please Enter Phone number or country_code");
   }
 
-  const user = await User.findOne({ phone });
+  let user = await User.findOne({ phone });
 
   const otp = generateOTP(); // Generate a new OTP regardless of user existence
 
@@ -149,7 +149,6 @@ const getUserById = asyncHandler(async (req, res) => {
   const { uid } = req.body;
   const userId = uid || req.headers.userID; // Get user ID from URL parameters
 
-
   // Find the user by ID
   const user = await User.findById(userId); // Exclude password from the response
 
@@ -182,8 +181,11 @@ const updateProfile = asyncHandler(async (req, res) => {
     throw new Error("User not found");
   }
 
-  const password = String(phone) + "28";
-  const phoneString = String(phone);
+  const password = "mosead_" + String(phone) + "28";
+  console.log(password); // Outputs: "mosead_789884733028"
+
+  const phoneString = "mosead_" + String(phone);
+  console.log(phoneString);
 
   // Only create a ConnectyCube user if cb_id is not already set
   if (!user.cb_id) {
@@ -218,15 +220,7 @@ const updateProfile = asyncHandler(async (req, res) => {
   const updatedUser = await user.save();
 
   res.status(200).json({
-    _id: updatedUser._id,
-    name: updatedUser.name,
-    about: updatedUser.about,
-    phone: updatedUser.phone,
-    otp_verified: updatedUser.otp_verified,
-    country_code: updatedUser.country_code,
-    isAdmin: updatedUser.isAdmin,
-    cb_id: updatedUser.cb_id, // Include cb_id in the response if needed
-    token: generateToken(updatedUser._id, updatedUser.role), // Generate token if needed
+    user: updatedUser,
     status: true,
     message: "User details update successfully",
   });
@@ -290,6 +284,7 @@ const authUser = asyncHandler(async (req, res) => {
 });
 
 const getUserDetailsByPhones = asyncHandler(async (req, res) => {
+  const userId = req.headers.userID;
   const { numbers } = req.body;
 
   if (!Array.isArray(numbers) || numbers.length === 0) {
@@ -298,9 +293,15 @@ const getUserDetailsByPhones = asyncHandler(async (req, res) => {
   }
 
   try {
-    // Use $in to find users with phone numbers in the provided array
-    const users = await User.find({ phone: { $in: numbers } });
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found.",
+      });
+    }
 
+    const users = await User.find({ phone: { $in: numbers } });
     if (users.length === 0) {
       return res.status(404).json({
         status: false,
@@ -309,14 +310,35 @@ const getUserDetailsByPhones = asyncHandler(async (req, res) => {
       });
     }
 
-    // Return user details
-    res.status(200).json({
-      status: true,
-      message: "Users retrieved successfully.",
-      data: users,
-    });
+    const userIdsToAdd = users
+      .map((otherUser) => otherUser._id)
+      .filter((id) => !id.equals(user._id)); // Ensure no self-reference
+
+    console.log("User IDs to Add:", userIdsToAdd); // Debug log
+
+    if (userIdsToAdd.length > 0) {
+      await User.updateOne(
+        { _id: user._id },
+        { $addToSet: { userIds: { $each: userIdsToAdd } } }
+      );
+
+      // Refetch the updated user data to verify the `userIds` field
+      const updatedUser = await User.findById(user._id);
+
+      return res.status(200).json({
+        status: true,
+        message: "User IDs added successfully to the main user.",
+        data: updatedUser,
+      });
+    } else {
+      res.status(200).json({
+        status: true,
+        message: "No new unique user IDs to add.",
+        data: user,
+      });
+    }
   } catch (error) {
-    console.error("Error fetching users:", error.message);
+    console.error("Error fetching or updating users:", error.message);
     res.status(500).json({ message: "Internal Server Error" });
   }
 });
@@ -330,5 +352,5 @@ module.exports = {
   updateProfile,
   getUserById,
   logoutUser,
-  getUserDetailsByPhones
+  getUserDetailsByPhones,
 };
