@@ -66,10 +66,9 @@ const io = require("socket.io")(server, {
 io.on("connection", (socket) => {
   console.log("Connected to socket.io");
   socket.on("setup", (userData) => {
-      console.log(userData);
     socket.join(userData._id);
     socket.emit("connected");
-});
+  });
 
   socket.on("join chat", (room) => {
     socket.join(room);
@@ -87,6 +86,7 @@ io.on("connection", (socket) => {
       if (user._id == newMessageRecieved.sender._id) return;
 
       socket.in(user._id).emit("message recieved", newMessageRecieved);
+
     });
   });
 
