@@ -1,6 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const Chat = require("../models/chatModel");
 const User = require("../models/userModel");
+const upload = require("../middleware/uploadMiddleware.js");
 
 //@description     Create or fetch One to One Chat
 //@route           POST /api/chat/
@@ -54,61 +55,203 @@ const accessChat = asyncHandler(async (req, res) => {
 //@description     Fetch all chats for a user
 //@route           GET /api/chat/
 //@access          Protected
+// const fetchChats = asyncHandler(async (req, res) => {
+//   console.log(req.user._id);
+
+//   try {
+//     const chats = await Chat.find({ users: { $elemMatch: { $eq: req.user._id } } })
+//       .populate("users", "-password")
+//       .populate("groupAdmin", "-password")
+//       .populate("latestMessage")
+//       .sort({ updatedAt: -1 });
+
+//     if (!chats || chats.length === 0) {
+//       return res.status(404).json({ message: "No chats found.", status: false });
+//     }
+
+//     const populatedChats = await User.populate(chats, {
+//       path: "latestMessage.sender",
+//       select: "name profile_pic phone",
+//     });
+
+//     res.status(200).json(populatedChats);
+//   } catch (error) {
+//     console.error("Error fetching chats:", error);
+//     res.status(500).json({ message: "Error fetching chats. Please try again later.", error: error.message });
+//   }
+// });
+
 const fetchChats = asyncHandler(async (req, res) => {
-  try {
-    Chat.find({ users: { $elemMatch: { $eq: req.user._id } } })
-      .populate("users", "-password")
-      .populate("groupAdmin", "-password")
-      .populate("latestMessage")
-      .sort({ updatedAt: -1 })
-      .then(async (results) => {
-        results = await User.populate(results, {
+      try {
+        // Fetch the main user data
+        const user = await User.findById(req.user._id);
+
+        // Fetch chats where the user is a participant
+        let chats = await Chat.find({
+          users: { $elemMatch: { $eq: req.user._id } },
+          isGroupChat: false,
+        })
+          .populate("users", "-password")
+          .populate("groupAdmin", "-password")
+          .populate("latestMessage")
+          .sort({ updatedAt: -1 });
+
+        // Filter chats to include only those with a latestMessage ID
+        chats = chats.filter(chat => chat.latestMessage);
+
+        if (!chats || chats.length === 0) {
+          return res
+            .status(404)
+            .json({ message: "No chats found.", status: false });
+        }
+
+        // Populate latestMessage sender details
+        const populatedChats = await User.populate(chats, {
           path: "latestMessage.sender",
           select: "name profile_pic phone",
         });
-        res.status(200).send(results);
-      });
+
+        // Send response with chats and additional users
+        res.status(200).json({ chats: populatedChats });
+      } catch (error) {
+        console.error("Error fetching chats:", error);
+        res.status(500).json({
+          message: "Error fetching chats. Please try again later.",
+          error: error.message,
+        });
+      }
+});
+
+const getMyGroups = asyncHandler(async (req, res) => {
+  try {
+    // Fetch the main user data
+    const user = await User.findById(req.user._id);
+
+    // Check if userIds exist in the user document
+    const additionalUsers = user.userIds
+      ? await User.find(
+          { _id: { $in: user.userIds } },
+          "name profile_pic phone"
+        )
+      : [];
+
+    // Fetch chats where the user is a participant
+    const chats = await Chat.find({
+      users: { $elemMatch: { $eq: req.user._id } },
+      isGroupChat: true,
+    })
+      .populate("users", "-password")
+      .populate("groupAdmin", "-password")
+      .populate("latestMessage")
+      .sort({ updatedAt: -1 });
+
+    if (!chats || chats.length === 0) {
+      return res
+        .status(404)
+        .json({ message: "No chats found.", status: false });
+    }
+
+    // Populate latestMessage sender details
+    const populatedChats = await User.populate(chats, {
+      path: "latestMessage.sender",
+      select: "name profile_pic phone",
+    });
+
+    // Send response with chats and additional users
+    res.status(200).json({ chats: populatedChats, additionalUsers });
   } catch (error) {
-    res.status(400);
-    throw new Error(error.message);
+    console.error("Error fetching chats:", error);
+    res.status(500).json({
+      message: "Error fetching chats. Please try again later.",
+      error: error.message,
+    });
   }
 });
+
+// const fetchChats = asyncHandler(async (req, res) => {
+//   try {
+//     // Step 1: Fetch chats where req.user._id is a participant
+//     let chats = await Chat.find({ users: { $elemMatch: { $eq: req.user._id } } })
+//       .populate("users", "-password")
+//       .populate("groupAdmin", "-password")
+//       .populate("latestMessage")
+//       .sort({ updatedAt: -1 })
+//       .exec();
+
+//     // Step 2: Populate latestMessage.sender details
+//     chats = await User.populate(chats, {
+//       path: "latestMessage.sender",
+//       select: "name profile_pic phone userIds",
+//     });
+
+//     // Step 3: Collect unique user IDs from all users' userIds arrays in the chats
+//     let uniqueUserIds = new Set();
+//     chats.forEach(chat => {
+//       chat.users.forEach(user => {
+//         if (user.userIds && user.userIds.length > 0) {
+//           user.userIds.forEach(id => uniqueUserIds.add(id.toString()));
+//         }
+//       });
+//     });
+
+//     // Step 4: Fetch all users corresponding to these userIds
+//     const additionalUsers = await User.find({ _id: { $in: Array.from(uniqueUserIds) } })
+//       .select("name profile_pic phone userIds");
+
+//     // Step 5: Send response with chats and additional users
+//     res.status(200).json({ chats, additionalUsers });
+//   } catch (error) {
+//     res.status(400).json({ message: error.message });
+//   }
+// });
 
 //@description     Create New Group Chat
 //@route           POST /api/chat/group
 //@access          Protected
 const createGroupChat = asyncHandler(async (req, res) => {
-  if (!req.body.users || !req.body.name) {
-    return res.status(400).send({ message: "Please Fill all the feilds" });
-  }
+  req.uploadPath = "uploads/group";
+  upload.single("group_picture")(req, res, async (err) => {
+    if (err) {
+      return next(new ErrorHandler(err.message, 400));
+    }
+    if (!req.body.users || !req.body.name) {
+      return res.status(400).send({ message: "Please Fill all the feilds" });
+    }
 
-  var users = JSON.parse(req.body.users);
+    var users = JSON.parse(req.body.users);
 
-  if (users.length < 2) {
-    return res
-      .status(400)
-      .send("More than 2 users are required to form a group chat");
-  }
+    if (users.length < 2) {
+      return res
+        .status(400)
+        .send("More than 2 users are required to form a group chat");
+    }
 
-  users.push(req.user);
+    users.push(req.user);
 
-  try {
-    const groupChat = await Chat.create({
-      chatName: req.body.name,
-      users: users,
-      isGroupChat: true,
-      groupAdmin: req.user,
-    });
+    // Get the profile picture path if uploaded
+    const group_picture = req.file
+      ? `${req.uploadPath}/${req.file.filename}`
+      : null;
 
-    const fullGroupChat = await Chat.findOne({ _id: groupChat._id })
-      .populate("users", "-password")
-      .populate("groupAdmin", "-password");
+    try {
+      const groupChat = await Chat.create({
+        chatName: req.body.name,
+        users: users,
+        isGroupChat: true,
+        groupAdmin: req.user,
+        group_picture: group_picture,
+      });
 
-    res.status(200).json(fullGroupChat);
-  } catch (error) {
-    res.status(400);
-    throw new Error(error.message);
-  }
+      const fullGroupChat = await Chat.findOne({ _id: groupChat._id })
+        .populate("users", "-password")
+        .populate("groupAdmin", "-password");
+
+      res.status(200).json(fullGroupChat);
+    } catch (error) {
+      res.status(400);
+      throw new Error(error.message);
+    }
+  });
 });
 
 // @desc    Rename Group
@@ -200,4 +343,5 @@ module.exports = {
   renameGroup,
   addToGroup,
   removeFromGroup,
+  getMyGroups,
 };

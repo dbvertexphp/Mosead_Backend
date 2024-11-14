@@ -165,66 +165,102 @@ const getUserById = asyncHandler(async (req, res) => {
 });
 
 const updateProfile = asyncHandler(async (req, res) => {
-  const { name, about, phone } = req.body;
-  const userId = req.headers.userID;
-
-  if (!userId) {
-    res.status(401);
-    throw new Error("User not authorized");
-  }
-
-  // Find the user by ID
-  const user = await User.findById(userId);
-
-  if (!user) {
-    res.status(404);
-    throw new Error("User not found");
-  }
-
-  const password = "mosead_" + String(phone) + "28";
-  console.log(password); // Outputs: "mosead_789884733028"
-
-  const phoneString = "mosead_" + String(phone);
-  console.log(phoneString);
-
-  // Only create a ConnectyCube user if cb_id is not already set
-  if (!user.cb_id) {
-    const { id } = await createConnectyCubeUser(
-      phoneString,
-      phone,
-      password,
-      name,
-      user.role
-    );
-    user.cb_id = id; // Save the ConnectyCube ID
-  }
-
-  // Update fields if provided
-  if (name) {
-    user.name = name;
-  }
-  if (about) {
-    user.about = about;
-  }
-  if (phone) {
-    // Check if another user with the same phone number exists
-    const phoneExists = await User.findOne({ phone, _id: { $ne: userId } });
-    if (phoneExists) {
-      res.status(400);
-      throw new Error("Phone number already in use by another user");
+  req.uploadPath = "uploads/profiles";
+  upload.single("profile_pic")(req, res, async (err) => {
+    if (err) {
+      return next(new ErrorHandler(err.message, 400));
     }
-    user.phone = phone;
-  }
+    const { name, about, phone } = req.body;
+    const userId = req.headers.userID;
 
-  // Save the updated user
-  const updatedUser = await user.save();
+    if (!userId) {
+      res.status(401);
+      throw new Error("User not authorized");
+    }
 
-  res.status(200).json({
-    user: updatedUser,
-    status: true,
-    message: "User details update successfully",
+    // Find the user by ID
+    const user = await User.findById(userId);
+
+    if (!user) {
+      res.status(404);
+      throw new Error("User not found");
+    }
+
+    const phoneNumber = String(phone);
+
+    const password = "mosead_" + String(phone) + "28";
+
+    const phoneString = "mosead_" + String(phone);
+
+    // Only create a ConnectyCube user if cb_id is not already set
+    if (!user.cb_id) {
+      const { id } = await createConnectyCubeUser(
+        phoneString,
+        phoneNumber,
+        password,
+        name,
+        user.role
+      );
+      user.cb_id = id; // Save the ConnectyCube ID
+    }
+
+    // Update fields if provided
+    if (name) {
+      user.name = name;
+    }
+    if (about) {
+      user.about = about;
+    }
+    if (phone) {
+      // Check if another user with the same phone number exists
+      const phoneExists = await User.findOne({ phone, _id: { $ne: userId } });
+      if (phoneExists) {
+        res.status(400);
+        throw new Error("Phone number already in use by another user");
+      }
+      user.phone = phone;
+    }
+
+    // Get the profile picture path if uploaded
+    if (req.file) {
+      user.profile_pic = `${req.uploadPath}/${req.file.filename}`;
+    }
+
+    // Save the updated user
+    const updatedUser = await user.save();
+
+    res.status(200).json({
+      user: updatedUser,
+      status: true,
+      message: "User details update successfully",
+    });
   });
 });
+
+const getUserProfileData = asyncHandler(async (req, res) => {
+      const userId = req.headers.userID; // Get the userID from the request header
+
+      if (!userId) {
+        res.status(401);
+        throw new Error("User not authorized");
+      }
+
+      // Find the user by ID
+      const user = await User.findById(userId).select("-password"); // Select all fields except password
+
+      if (!user) {
+        res.status(404);
+        throw new Error("User not found");
+      }
+
+      // Return the user profile data
+      res.status(200).json({
+        user: user,
+        status: true,
+        message: "User profile retrieved successfully",
+      });
+    });
+
 
 const logoutUser = asyncHandler(async (req, res) => {
   const authHeader = req.headers.authorization;
@@ -284,64 +320,80 @@ const authUser = asyncHandler(async (req, res) => {
 });
 
 const getUserDetailsByPhones = asyncHandler(async (req, res) => {
-  const userId = req.headers.userID;
-  const { numbers } = req.body;
+      const userId = req.headers.userID;
+      const { numbers, name } = req.body;
 
-  if (!Array.isArray(numbers) || numbers.length === 0) {
-    res.status(400);
-    throw new Error("Please provide an array of phone numbers.");
-  }
+      if ((!Array.isArray(numbers) || numbers.length === 0) && !name) {
+        res.status(400);
+        throw new Error("Please provide an array of phone numbers or a name to search.");
+      }
 
-  try {
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({
-        status: false,
-        message: "User not found.",
-      });
-    }
+      try {
+        const user = await User.findById(userId);
+        if (!user) {
+          return res.status(404).json({
+            status: false,
+            message: "User not found.",
+          });
+        }
 
-    const users = await User.find({ phone: { $in: numbers } });
-    if (users.length === 0) {
-      return res.status(404).json({
-        status: false,
-        message: "No users found for the provided phone numbers.",
-        data: [],
-      });
-    }
+        // Create the search query object
+        let searchQuery = {};
 
-    const userIdsToAdd = users
-      .map((otherUser) => otherUser._id)
-      .filter((id) => !id.equals(user._id)); // Ensure no self-reference
+        if (numbers && numbers.length > 0) {
+          searchQuery.phone = { $in: numbers };
+        }
 
-    console.log("User IDs to Add:", userIdsToAdd); // Debug log
+        if (name) {
+          searchQuery.name = { $regex: name, $options: 'i' }; // case-insensitive search
+        }
 
-    if (userIdsToAdd.length > 0) {
-      await User.updateOne(
-        { _id: user._id },
-        { $addToSet: { userIds: { $each: userIdsToAdd } } }
-      );
+        // Search for users based on phone numbers and/or name
+        const users = await User.find(searchQuery);
 
-      // Refetch the updated user data to verify the `userIds` field
-      const updatedUser = await User.findById(user._id);
+        if (users.length === 0) {
+          return res.status(404).json({
+            status: false,
+            message: "No users found for the provided search criteria.",
+            data: [],
+          });
+        }
 
-      return res.status(200).json({
-        status: true,
-        message: "User IDs added successfully to the main user.",
-        data: updatedUser,
-      });
-    } else {
-      res.status(200).json({
-        status: true,
-        message: "No new unique user IDs to add.",
-        data: user,
-      });
-    }
-  } catch (error) {
-    console.error("Error fetching or updating users:", error.message);
-    res.status(500).json({ message: "Internal Server Error" });
-  }
+        const userIdsToAdd = users
+          .map((otherUser) => otherUser._id)
+          .filter((id) => !id.equals(user._id)); // Ensure no self-reference
+
+        if (userIdsToAdd.length > 0) {
+          await User.updateOne(
+            { _id: user._id },
+            { $addToSet: { userIds: { $each: userIdsToAdd } } }
+          );
+
+          // Refetch the updated user data and populate the `userIds` field
+          const updatedUser = await User.findById(user._id).populate('userIds');
+
+          return res.status(200).json({
+            status: true,
+            message: "User IDs added successfully to the main user.",
+            data: updatedUser,
+          });
+        } else {
+          // If no new unique user IDs were added, still return the user data with populated `userIds`
+          const populatedUser = await User.findById(user._id).populate('userIds');
+
+          res.status(200).json({
+            status: true,
+            message: "No new unique user IDs to add.",
+            data: populatedUser,
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching or updating users:", error.message);
+        res.status(500).json({ message: "Internal Server Error" });
+      }
 });
+
+
 
 module.exports = {
   allUsers,
@@ -353,4 +405,5 @@ module.exports = {
   getUserById,
   logoutUser,
   getUserDetailsByPhones,
+  getUserProfileData
 };

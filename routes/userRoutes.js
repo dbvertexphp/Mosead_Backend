@@ -7,7 +7,8 @@ const {
   updateProfile,
   getUserById,
   logoutUser,
-  getUserDetailsByPhones
+  getUserDetailsByPhones,
+  getUserProfileData
 } = require("../controllers/userControllers");
 const { protect } = require("../middleware/authMiddleware");
 const Authorization = require("../middleware/Authorization.middleware.js");
@@ -22,6 +23,7 @@ router.route("/auth/resendOTP").post(resendOTP);
 router.route("/setUserData").post(protect ,updateProfile);
 router.route("/getUserData").post(protect, getUserById);
 router.route("/getAllUsers").get(protect, allUsers);
+router.route("/getUserProfileData").get(protect, getUserProfileData);
 router.route("/logout").post(protect, logoutUser);
 router.route("/auth/getUserDetailsByPhones").post(protect, getUserDetailsByPhones);
 

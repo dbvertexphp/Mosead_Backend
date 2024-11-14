@@ -9,6 +9,9 @@ const chatModel = mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Message",
     },
+    group_picture: {
+      type: "String",
+    },
     groupAdmin: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }
