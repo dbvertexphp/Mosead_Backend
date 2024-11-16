@@ -1,7 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const Chat = require("../models/chatModel");
 const User = require("../models/userModel");
-const { upload } = require("../middleware/uploadMiddleware.js");
+const uploadFile  = require("../middleware/uploadCommanFile");
 
 //@description     Create or fetch One to One Chat
 //@route           POST /api/chat/
@@ -210,7 +210,7 @@ const getMyGroups = asyncHandler(async (req, res) => {
 //@access          Protected
 const createGroupChat = asyncHandler(async (req, res) => {
   req.uploadPath = "uploads/group";
-  upload.single("group_picture")(req, res, async (err) => {
+  uploadFile.single("group_picture")(req, res, async (err) => {
     if (err) {
       return next(new ErrorHandler(err.message, 400));
     }

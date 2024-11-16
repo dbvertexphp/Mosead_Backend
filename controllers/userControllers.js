@@ -1,7 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const User = require("../models/userModel");
 const generateToken = require("../config/generateToken");
-const { upload } = require("../middleware/uploadMiddleware.js");
+const  uploadFile  = require("../middleware/uploadCommanFile.js");
 const { createConnectyCubeUser } = require("../utils/connectyCubeUtils.js");
 const cookie = require("cookie");
 
@@ -166,7 +166,7 @@ const getUserById = asyncHandler(async (req, res) => {
 
 const updateProfile = asyncHandler(async (req, res) => {
   req.uploadPath = "uploads/profiles";
-  upload.single("profile_pic")(req, res, async (err) => {
+  uploadFile.single("profile_pic")(req, res, async (err) => {
     if (err) {
       return next(new ErrorHandler(err.message, 400));
     }
