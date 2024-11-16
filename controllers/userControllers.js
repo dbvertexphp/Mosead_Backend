@@ -1,7 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const User = require("../models/userModel");
 const generateToken = require("../config/generateToken");
-const upload = require("../middleware/uploadMiddleware.js");
+const { upload } = require("../middleware/uploadMiddleware.js");
 const { createConnectyCubeUser } = require("../utils/connectyCubeUtils.js");
 const cookie = require("cookie");
 
@@ -238,29 +238,28 @@ const updateProfile = asyncHandler(async (req, res) => {
 });
 
 const getUserProfileData = asyncHandler(async (req, res) => {
-      const userId = req.headers.userID; // Get the userID from the request header
+  const userId = req.headers.userID; // Get the userID from the request header
 
-      if (!userId) {
-        res.status(401);
-        throw new Error("User not authorized");
-      }
+  if (!userId) {
+    res.status(401);
+    throw new Error("User not authorized");
+  }
 
-      // Find the user by ID
-      const user = await User.findById(userId).select("-password"); // Select all fields except password
+  // Find the user by ID
+  const user = await User.findById(userId).select("-password"); // Select all fields except password
 
-      if (!user) {
-        res.status(404);
-        throw new Error("User not found");
-      }
+  if (!user) {
+    res.status(404);
+    throw new Error("User not found");
+  }
 
-      // Return the user profile data
-      res.status(200).json({
-        user: user,
-        status: true,
-        message: "User profile retrieved successfully",
-      });
+  // Return the user profile data
+  res.status(200).json({
+    user: user,
+    status: true,
+    message: "User profile retrieved successfully",
+  });
 });
-
 
 const logoutUser = asyncHandler(async (req, res) => {
   const authHeader = req.headers.authorization;
@@ -320,79 +319,78 @@ const authUser = asyncHandler(async (req, res) => {
 });
 
 const getUserDetailsByPhones = asyncHandler(async (req, res) => {
-      const userId = req.headers.userID;
-      const { numbers, name } = req.body;
+  const userId = req.headers.userID;
+  const { numbers, name } = req.body;
 
-      try {
-        const user = await User.findById(userId);
-        if (!user) {
-          return res.status(404).json({
-            status: false,
-            message: "User not found.",
-          });
-        }
+  try {
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found.",
+      });
+    }
 
-        // Create the search query object
-        let searchQuery = {};
+    // Create the search query object
+    let searchQuery = {};
 
-        if (numbers && numbers.length > 0) {
-          searchQuery.phone = { $in: numbers };
-        }
+    if (numbers && numbers.length > 0) {
+      searchQuery.phone = { $in: numbers };
+    }
 
-        if (name) {
-          searchQuery.name = { $regex: name, $options: 'i' }; // case-insensitive search
-        }
+    if (name) {
+      searchQuery.name = { $regex: name, $options: "i" }; // case-insensitive search
+    }
 
-        if (!numbers && !name) {
-          // If neither 'numbers' nor 'name' are provided, get the users from 'userIds'
-          searchQuery = { _id: { $in: user.userIds } };
-        }
+    if (!numbers && !name) {
+      // If neither 'numbers' nor 'name' are provided, get the users from 'userIds'
+      searchQuery = { _id: { $in: user.userIds } };
+    }
 
-        // Search for users based on phone numbers and/or name or userIds
-        const users = await User.find(searchQuery);
+    // Search for users based on phone numbers and/or name or userIds
+    const users = await User.find(searchQuery);
 
-        if (users.length === 0) {
-          return res.status(404).json({
-            status: false,
-            message: "No users found for the provided search criteria.",
-            data: [],
-          });
-        }
+    if (users.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "No users found for the provided search criteria.",
+        data: [],
+      });
+    }
 
-        const userIdsToAdd = users
-          .map((otherUser) => otherUser._id)
-          .filter((id) => !id.equals(user._id)); // Ensure no self-reference
+    const userIdsToAdd = users
+      .map((otherUser) => otherUser._id)
+      .filter((id) => !id.equals(user._id)); // Ensure no self-reference
 
-        if (userIdsToAdd.length > 0) {
-          await User.updateOne(
-            { _id: user._id },
-            { $addToSet: { userIds: { $each: userIdsToAdd } } }
-          );
+    if (userIdsToAdd.length > 0) {
+      await User.updateOne(
+        { _id: user._id },
+        { $addToSet: { userIds: { $each: userIdsToAdd } } }
+      );
 
-          // Refetch the updated user data and populate the `userIds` field
-          const updatedUser = await User.findById(user._id).populate('userIds');
+      // Refetch the updated user data and populate the `userIds` field
+      const updatedUser = await User.findById(user._id).populate("userIds");
 
-          return res.status(200).json({
-            status: true,
-            message: "User IDs added successfully to the main user.",
-            data: updatedUser,
-          });
-        } else {
-          // If no new unique user IDs were added, still return the user data with populated `userIds`
-          const populatedUser = await User.findById(user._id).populate('userIds');
+      return res.status(200).json({
+        status: true,
+        message: "User IDs added successfully to the main user.",
+        data: updatedUser,
+      });
+    } else {
+      // If no new unique user IDs were added, still return the user data with populated `userIds`
+      const populatedUser = await User.findById(user._id).populate("userIds");
 
-          res.status(200).json({
-            status: true,
-            message: "No new unique user IDs to add.",
-            data: populatedUser,
-          });
-        }
-      } catch (error) {
-        console.error("Error fetching or updating users:", error.message);
-        res.status(500).json({ message: "Internal Server Error" });
-      }
+      res.status(200).json({
+        status: true,
+        message: "No new unique user IDs to add.",
+        data: populatedUser,
+      });
+    }
+  } catch (error) {
+    console.error("Error fetching or updating users:", error.message);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
 });
-
 
 module.exports = {
   allUsers,
@@ -404,5 +402,5 @@ module.exports = {
   getUserById,
   logoutUser,
   getUserDetailsByPhones,
-  getUserProfileData
+  getUserProfileData,
 };

@@ -1,7 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const Chat = require("../models/chatModel");
 const User = require("../models/userModel");
-const upload = require("../middleware/uploadMiddleware.js");
+const { upload } = require("../middleware/uploadMiddleware.js");
 
 //@description     Create or fetch One to One Chat
 //@route           POST /api/chat/
@@ -82,44 +82,44 @@ const accessChat = asyncHandler(async (req, res) => {
 // });
 
 const fetchChats = asyncHandler(async (req, res) => {
-      try {
-        // Fetch the main user data
-        const user = await User.findById(req.user._id);
+  try {
+    // Fetch the main user data
+    const user = await User.findById(req.user._id);
 
-        // Fetch chats where the user is a participant
-        let chats = await Chat.find({
-          users: { $elemMatch: { $eq: req.user._id } },
-          isGroupChat: false,
-        })
-          .populate("users", "-password")
-          .populate("groupAdmin", "-password")
-          .populate("latestMessage")
-          .sort({ updatedAt: -1 });
+    // Fetch chats where the user is a participant
+    let chats = await Chat.find({
+      users: { $elemMatch: { $eq: req.user._id } },
+      isGroupChat: false,
+    })
+      .populate("users", "-password")
+      .populate("groupAdmin", "-password")
+      .populate("latestMessage")
+      .sort({ updatedAt: -1 });
 
-        // Filter chats to include only those with a latestMessage ID
-        chats = chats.filter(chat => chat.latestMessage);
+    // Filter chats to include only those with a latestMessage ID
+    chats = chats.filter((chat) => chat.latestMessage);
 
-        if (!chats || chats.length === 0) {
-          return res
-            .status(404)
-            .json({ message: "No chats found.", status: false });
-        }
+    if (!chats || chats.length === 0) {
+      return res
+        .status(404)
+        .json({ message: "No chats found.", status: false });
+    }
 
-        // Populate latestMessage sender details
-        const populatedChats = await User.populate(chats, {
-          path: "latestMessage.sender",
-          select: "name profile_pic phone",
-        });
+    // Populate latestMessage sender details
+    const populatedChats = await User.populate(chats, {
+      path: "latestMessage.sender",
+      select: "name profile_pic phone",
+    });
 
-        // Send response with chats and additional users
-        res.status(200).json({ chats: populatedChats });
-      } catch (error) {
-        console.error("Error fetching chats:", error);
-        res.status(500).json({
-          message: "Error fetching chats. Please try again later.",
-          error: error.message,
-        });
-      }
+    // Send response with chats and additional users
+    res.status(200).json({ chats: populatedChats });
+  } catch (error) {
+    console.error("Error fetching chats:", error);
+    res.status(500).json({
+      message: "Error fetching chats. Please try again later.",
+      error: error.message,
+    });
+  }
 });
 
 const getMyGroups = asyncHandler(async (req, res) => {

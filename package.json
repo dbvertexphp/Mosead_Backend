@@ -20,6 +20,7 @@
     "connectycube": "^3.35.1",
     "cookie": "^1.0.1",
     "cookie-parser": "^1.4.7",
+    "crypto-js": "^4.2.0",
     "dotenv": "^9.0.2",
     "express": "^4.17.1",
     "express-async-handler": "^1.1.4",
