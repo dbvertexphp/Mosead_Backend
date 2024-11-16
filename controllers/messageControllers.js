@@ -2,6 +2,7 @@ const asyncHandler = require("express-async-handler");
 const Message = require("../models/messageModel");
 const User = require("../models/userModel");
 const Chat = require("../models/chatModel");
+const upload = require("../middleware/uploadMiddleware.js");
 
 //@description     Get all Messages
 //@route           GET /api/Message/:chatId
@@ -22,36 +23,53 @@ const allMessages = asyncHandler(async (req, res) => {
 //@route           POST /api/Message/
 //@access          Protected
 const sendMessage = asyncHandler(async (req, res) => {
-  const { content, chatId } = req.body;
+  req.uploadPath = "uploads/media";
 
-  if (!content || !chatId) {
-    console.log("Invalid data passed into request");
-    return res.sendStatus(400);
-  }
+  upload(req, res, async (err) => {
+    if (err) {
+      return next(new ErrorHandler(err.message, 400)); // Handle file upload error
+    }
+    const { content, chatId } = req.body;
 
-  var newMessage = {
-    sender: req.user._id,
-    content: content,
-    chat: chatId,
-  };
+    if (!content || !chatId) {
+      console.log("Invalid data passed into request");
+      return res.sendStatus(400);
+    }
 
-  try {
-    var message = await Message.create(newMessage);
+    var newMessage = {
+      sender: req.user._id,
+      content: content,
+      chat: chatId,
+      media: [],
+    };
 
-    message = await message.populate("sender", "name profile_pic").execPopulate();
-    message = await message.populate("chat").execPopulate();
-    message = await User.populate(message, {
-      path: "chat.users",
-      select: "name profile_pic phone",
-    });
+    // If media files are uploaded, save their paths to the newMessage object
+    if (req.files && req.files.length > 0) {
+      req.files.forEach(file => {
+        newMessage.media.push(`${req.uploadPath}/${file.filename}`); // Save the media file paths
+      });
+    }
 
-    await Chat.findByIdAndUpdate(req.body.chatId, { latestMessage: message });
+    try {
+      var message = await Message.create(newMessage);
 
-    res.json(message);
-  } catch (error) {
-    res.status(400);
-    throw new Error(error.message);
-  }
+      message = await message
+        .populate("sender", "name profile_pic")
+        .execPopulate();
+      message = await message.populate("chat").execPopulate();
+      message = await User.populate(message, {
+        path: "chat.users",
+        select: "name profile_pic phone",
+      });
+
+      await Chat.findByIdAndUpdate(req.body.chatId, { latestMessage: message });
+
+      res.json(message);
+    } catch (error) {
+      res.status(400);
+      throw new Error(error.message);
+    }
+  });
 });
 
 module.exports = { allMessages, sendMessage };

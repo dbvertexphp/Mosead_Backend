@@ -259,7 +259,7 @@ const getUserProfileData = asyncHandler(async (req, res) => {
         status: true,
         message: "User profile retrieved successfully",
       });
-    });
+});
 
 
 const logoutUser = asyncHandler(async (req, res) => {
@@ -323,11 +323,6 @@ const getUserDetailsByPhones = asyncHandler(async (req, res) => {
       const userId = req.headers.userID;
       const { numbers, name } = req.body;
 
-      if ((!Array.isArray(numbers) || numbers.length === 0) && !name) {
-        res.status(400);
-        throw new Error("Please provide an array of phone numbers or a name to search.");
-      }
-
       try {
         const user = await User.findById(userId);
         if (!user) {
@@ -348,7 +343,12 @@ const getUserDetailsByPhones = asyncHandler(async (req, res) => {
           searchQuery.name = { $regex: name, $options: 'i' }; // case-insensitive search
         }
 
-        // Search for users based on phone numbers and/or name
+        if (!numbers && !name) {
+          // If neither 'numbers' nor 'name' are provided, get the users from 'userIds'
+          searchQuery = { _id: { $in: user.userIds } };
+        }
+
+        // Search for users based on phone numbers and/or name or userIds
         const users = await User.find(searchQuery);
 
         if (users.length === 0) {
@@ -392,7 +392,6 @@ const getUserDetailsByPhones = asyncHandler(async (req, res) => {
         res.status(500).json({ message: "Internal Server Error" });
       }
 });
-
 
 
 module.exports = {
