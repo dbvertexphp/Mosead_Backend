@@ -27,7 +27,6 @@ const allMessages = asyncHandler(async (req, res) => {
       .sort({ createdAt: -1 }) // Sort messages by creation date, newest first
       .skip((page - 1) * limit) // Skip messages for previous pages
       .limit(limit) // Limit to the specified number of messages
-      .populate("sender", "name pic email")
       .populate("chat");
 
     // If no messages are found, return a message indicating so
