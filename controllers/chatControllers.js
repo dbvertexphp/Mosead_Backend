@@ -158,7 +158,7 @@ const fetchChats = asyncHandler(async (req, res) => {
     const populatedChats = await User.populate(chats);
 
     // Send response with chats and additional users
-    res.status(200).json({ chats: populatedChats });
+    res.status(200).json({ chats: populatedChats, status: true });
   } catch (error) {
     console.error("Error fetching chats:", error);
     res.status(500).json({
