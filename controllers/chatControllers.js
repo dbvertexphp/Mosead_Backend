@@ -61,7 +61,6 @@ const accessChat = asyncHandler(async (req, res) => {
       }
 });
 
-
 const chatDelete = asyncHandler(async (req, res) => {
   const { chatId } = req.body;
 
@@ -156,10 +155,7 @@ const fetchChats = asyncHandler(async (req, res) => {
     }
 
     // Populate latestMessage sender details
-    const populatedChats = await User.populate(chats, {
-      path: "latestMessage.sender",
-      select: "name profile_pic phone",
-    });
+    const populatedChats = await User.populate(chats);
 
     // Send response with chats and additional users
     res.status(200).json({ chats: populatedChats });
