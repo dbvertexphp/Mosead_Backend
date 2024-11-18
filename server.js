@@ -21,6 +21,7 @@ app.use(express.json()); // to accept json data
 
 app.use(cookieParser());
 
+
 app.use("/api/user", userRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/message", messageRoutes);
@@ -29,6 +30,13 @@ app.use("/api/app", companyDetails);
 // --------------------------deployment------------------------------
 
 const __dirname1 = path.resolve();
+app.use(express.static(path.join(__dirname1, "")));
+// app.use("/uploads", express.static("uploads"));
+// app.use("/uploads", express.static("uploads/profiles"));
+// app.use("/uploads", express.static("uploads/media"));
+// app.use("/uploads", express.static("uploads/group"));
+
+
 
 if (process.env.NODE_ENV == "production") {
   app.use(express.static(path.join(__dirname1, "/view")));

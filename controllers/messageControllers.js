@@ -5,34 +5,64 @@ const Chat = require("../models/chatModel");
 const { upload, checkTotalSize } = require("../middleware/uploadMiddleware.js");
 const CryptoJS = require("crypto-js");
 
-//@description     Get all Messages
-//@route           GET /api/Message/:chatId
-//@access          Protected
 const allMessages = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  const page = parseInt(req.query.page) || 1; // Default to page 1 if not provided
+  const limit = parseInt(req.query.limit) || 10; // Default to 10 messages per page
+  const search = req.query.search || "";
+
   try {
-    const messages = await Message.find({ chat: req.params.chatId })
+    // Fetch messages matching the chat ID and not deleted for the user
+    const query = {
+      chat: req.params.chatId,
+      deletedFor: { $nin: [userId] },
+    };
+
+    const messages = await Message.find(query)
+      .sort({ createdAt: -1 }) // Sort messages by creation date, newest first
+      .skip((page - 1) * limit) // Skip messages for previous pages
+      .limit(limit) // Limit to the specified number of messages
       .populate("sender", "name pic email")
       .populate("chat");
-    // Decrypt each message's content
-    const decryptedMessages = messages.map((message) => {
-      const bytes = CryptoJS.AES.decrypt(
-        message.content,
-        process.env.SECRET_KEY
-      );
-      const originalContent = bytes.toString(CryptoJS.enc.Utf8);
-      return { ...message.toObject(), content: originalContent }; // Replace encrypted content with decrypted
-    });
 
-    res.json(decryptedMessages);
+    // If no messages are found, return a message indicating so
+    if (messages.length === 0) {
+      return res.status(404).json({
+        message: "No messages found for this chat.",
+        status: false,
+      });
+    }
+
+    // Decrypt and filter messages
+    const filteredMessages = messages
+      .map((message) => {
+        const bytes = CryptoJS.AES.decrypt(
+          message.content,
+          process.env.SECRET_KEY
+        );
+        const originalContent = bytes.toString(CryptoJS.enc.Utf8);
+        return { ...message.toObject(), content: originalContent }; // Replace encrypted with decrypted
+      })
+      .filter((message) =>
+        message.content.toLowerCase().includes(search.toLowerCase())
+      );
+
+    // Get the total count of messages for the given chat
+    const totalMessages = await Message.countDocuments(query);
+    const totalPages = Math.ceil(totalMessages / limit);
+
+    res.json({
+      messages: filteredMessages,
+      page,
+      limit,
+      totalMessages,
+      totalPages,
+    });
   } catch (error) {
-    res.status(400);
-    throw new Error(error.message);
+    res.status(400).json({ message: error.message, status: false });
   }
 });
 
-//@description     Create New Message
-//@route           POST /api/Message/
-//@access          Protected
 const sendMessage = asyncHandler(async (req, res) => {
   req.uploadPath = "uploads/media";
 
@@ -101,4 +131,123 @@ const sendMessage = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { allMessages, sendMessage };
+const clearMessages = asyncHandler(async (req, res) => {
+  const { chatId } = req.body;
+
+  try {
+    // Delete all messages associated with the chatId
+    await Message.deleteMany({ chat: chatId });
+
+    // Update the latestMessage field in the chat to null
+    await Chat.findByIdAndUpdate(chatId, { latestMessage: null });
+
+    res.status(200).json({
+      message: "All messages cleared successfully",
+      status: true,
+    });
+  } catch (error) {
+    res.status(400);
+    throw new Error("Failed to clear messages: " + error.message);
+  }
+});
+
+const deleteMessageForMe = asyncHandler(async (req, res) => {
+  const { messageId } = req.body;
+  if (!messageId) {
+    return res
+      .status(400)
+      .json({ message: "Message Id is required", status: false });
+  }
+  try {
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res
+        .status(400)
+        .json({ message: "Message not found", status: false });
+    }
+
+    if (!message.deletedFor.includes(req.user._id)) {
+      message.deletedFor.push(req.user._id);
+      await message.save();
+    }
+    res.json({
+      message: "Message deleted for you successfully",
+      messageId: message._id,
+      status: true,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message, status: false });
+  }
+});
+
+const deleteMessageForEveryone = asyncHandler(async (req, res) => {
+  const { messageId } = req.body;
+  if (!messageId) {
+    return res
+      .status(400)
+      .json({ message: "Message ID is required", status: false });
+  }
+
+  try {
+    const message = await Message.findById(messageId);
+
+    if (!message) {
+      return res
+        .status(404)
+        .json({ message: "Message not found", status: false });
+    }
+
+    // Ensure only the sender can delete the message for everyone
+    if (message.sender.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        message: "You are not authorized to delete this message",
+        status: false,
+      });
+    }
+
+    // Delete the message from the database
+    await Message.deleteOne({ _id: messageId });
+
+    res.json({
+      message: "Message deleted for everyone successfully",
+      status: true,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message, status: false });
+  }
+});
+
+const clearAllMessages = asyncHandler(async (req, res) => {
+  const { chatId } = req.body;
+
+  if (!chatId) {
+    return res
+      .status(400)
+      .json({ message: "Chat ID is required", status: false });
+  }
+
+  try {
+    // Update all messages in the chat to include the user's ID in the `deletedFor` array
+    const result = await Message.updateMany(
+      { chat: chatId, deletedFor: { $nin: [req.user._id] } }, // Only update messages not already deleted for the user
+      { $push: { deletedFor: req.user._id } }
+    );
+
+    res.json({
+      message: `All messages in the chat have been cleared for you successfully.`,
+      status: true,
+      updatedCount: result.nModified, // Number of messages updated
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message, status: false });
+  }
+});
+
+module.exports = {
+  allMessages,
+  sendMessage,
+  clearMessages,
+  deleteMessageForMe,
+  deleteMessageForEveryone,
+  clearAllMessages,
+};

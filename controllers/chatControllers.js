@@ -1,7 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const Chat = require("../models/chatModel");
 const User = require("../models/userModel");
-const uploadFile  = require("../middleware/uploadCommanFile");
+const uploadFile = require("../middleware/uploadCommanFile");
 
 //@description     Create or fetch One to One Chat
 //@route           POST /api/chat/
@@ -44,7 +44,7 @@ const accessChat = asyncHandler(async (req, res) => {
         "users",
         "-password"
       );
-      res.status(200).json(FullChat);
+      res.status(200).json({FullChat: FullChat, status: true});
     } catch (error) {
       res.status(400);
       throw new Error(error.message);
@@ -52,7 +52,47 @@ const accessChat = asyncHandler(async (req, res) => {
   }
 });
 
-//@description     Fetch all chats for a user
+const chatDelete = asyncHandler(async (req, res) => {
+  const { chatId } = req.body;
+
+  if (!chatId) {
+    console.log("ChatId param not sent with request");
+    return res.sendStatus(400);
+  }
+
+  try {
+    // Find the chat by its ID
+    const chat = await Chat.findById(chatId);
+
+    if (!chat) {
+      return res.status(404).json({
+        message: "Chat not found",
+        status: false,
+      });
+    }
+
+    // Check if the user is part of the chat before deleting
+    if (!chat.users.includes(req.user._id)) {
+      return res.status(403).json({
+        message: "You are not authorized to delete this chat",
+        status: false,
+      });
+    }
+
+    // Delete the chat
+    await Chat.findByIdAndDelete(chatId);
+
+    res.status(200).json({
+      message: "Chat deleted successfully",
+      status: true,
+    });
+  } catch (error) {
+    res.status(400);
+    throw new Error(error.message);
+  }
+});
+
+//@description Fetch all chats for a user
 //@route           GET /api/chat/
 //@access          Protected
 // const fetchChats = asyncHandler(async (req, res) => {
@@ -344,4 +384,5 @@ module.exports = {
   addToGroup,
   removeFromGroup,
   getMyGroups,
+  chatDelete
 };
