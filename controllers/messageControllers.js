@@ -10,11 +10,16 @@ const allMessages = asyncHandler(async (req, res) => {
   const page = parseInt(req.query.page) || 1; // Default to page 1 if not provided
   const limit = parseInt(req.query.limit) || 10; // Default to 10 messages per page
   const search = req.query.search || "";
+  const { chatId } = req.body;
 
   try {
+
+      if (!chatId) {
+            return res.status(400).json({ message: "chatId is requires", status: false });
+      }
     // Fetch messages matching the chat ID and not deleted for the user
     const query = {
-      chat: req.params.chatId,
+      chat: chatId,
       deletedFor: { $nin: [userId] },
     };
 

@@ -7,50 +7,60 @@ const uploadFile = require("../middleware/uploadCommanFile");
 //@route           POST /api/chat/
 //@access          Protected
 const accessChat = asyncHandler(async (req, res) => {
-  const { userId } = req.body;
+      const { userId } = req.body;
 
-  if (!userId) {
-    console.log("UserId param not sent with request");
-    return res.sendStatus(400);
-  }
+      if (!userId) {
+        console.log("UserId param not sent with request");
+        return res.sendStatus(400);
+      }
 
-  var isChat = await Chat.find({
-    isGroupChat: false,
-    $and: [
-      { users: { $elemMatch: { $eq: req.user._id } } },
-      { users: { $elemMatch: { $eq: userId } } },
-    ],
-  })
-    .populate("users", "-password")
-    .populate("latestMessage");
+      // Check if chat already exists between the users
+      let isChat = await Chat.find({
+        isGroupChat: false,
+        $and: [
+          { users: { $elemMatch: { $eq: req.user._id } } },
+          { users: { $elemMatch: { $eq: userId } } },
+        ],
+      })
+        .populate("users", "-password")
+        .populate("latestMessage");
 
-  isChat = await User.populate(isChat, {
-    path: "latestMessage.sender",
-    select: "name profile_pic phone",
-  });
+      // If chat exists, return it
+      if (isChat.length > 0) {
+        // Ensure that the latest message sender is populated
+        isChat = await User.populate(isChat, {
+          path: "latestMessage.sender",
+          select: "name profile_pic phone",
+        });
+        return res.status(200).json({ FullChat: isChat[0], status: true });
+      } else {
+        // If chat doesn't exist, create it
+        const chatData = {
+          chatName: "sender",
+          isGroupChat: false,
+          users: [req.user._id, userId],
+        };
 
-  if (isChat.length > 0) {
-    res.send(isChat[0]);
-  } else {
-    var chatData = {
-      chatName: "sender",
-      isGroupChat: false,
-      users: [req.user._id, userId],
-    };
+        try {
+          const createdChat = await Chat.create(chatData);
 
-    try {
-      const createdChat = await Chat.create(chatData);
-      const FullChat = await Chat.findOne({ _id: createdChat._id }).populate(
-        "users",
-        "-password"
-      );
-      res.status(200).json({FullChat: FullChat, status: true});
-    } catch (error) {
-      res.status(400);
-      throw new Error(error.message);
-    }
-  }
+          // Populate necessary fields for the new chat
+          const FullChat = await Chat.findOne({ _id: createdChat._id })
+            .populate("users", "-password")
+            .populate("latestMessage")
+            .populate({
+              path: "latestMessage.sender",
+              select: "name profile_pic phone",
+            });
+
+          return res.status(200).json({ FullChat: FullChat, status: true });
+        } catch (error) {
+          res.status(400);
+          throw new Error(error.message);
+        }
+      }
 });
+
 
 const chatDelete = asyncHandler(async (req, res) => {
   const { chatId } = req.body;
