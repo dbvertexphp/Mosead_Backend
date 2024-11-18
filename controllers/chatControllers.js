@@ -2,63 +2,64 @@ const asyncHandler = require("express-async-handler");
 const Chat = require("../models/chatModel");
 const User = require("../models/userModel");
 const uploadFile = require("../middleware/uploadCommanFile");
+const CryptoJS = require("crypto-js");
 
 //@description     Create or fetch One to One Chat
 //@route           POST /api/chat/
 //@access          Protected
 const accessChat = asyncHandler(async (req, res) => {
-      const { userId } = req.body;
+  const { userId } = req.body;
 
-      if (!userId) {
-        console.log("UserId param not sent with request");
-        return res.sendStatus(400);
-      }
+  if (!userId) {
+    console.log("UserId param not sent with request");
+    return res.sendStatus(400);
+  }
 
-      // Check if chat already exists between the users
-      let isChat = await Chat.find({
-        isGroupChat: false,
-        $and: [
-          { users: { $elemMatch: { $eq: req.user._id } } },
-          { users: { $elemMatch: { $eq: userId } } },
-        ],
-      })
+  // Check if chat already exists between the users
+  let isChat = await Chat.find({
+    isGroupChat: false,
+    $and: [
+      { users: { $elemMatch: { $eq: req.user._id } } },
+      { users: { $elemMatch: { $eq: userId } } },
+    ],
+  })
+    .populate("users", "-password")
+    .populate("latestMessage");
+
+  // If chat exists, return it
+  if (isChat.length > 0) {
+    // Ensure that the latest message sender is populated
+    isChat = await User.populate(isChat, {
+      path: "latestMessage.sender",
+      select: "name profile_pic phone",
+    });
+    return res.status(200).json({ FullChat: isChat[0], status: true });
+  } else {
+    // If chat doesn't exist, create it
+    const chatData = {
+      chatName: "sender",
+      isGroupChat: false,
+      users: [req.user._id, userId],
+    };
+
+    try {
+      const createdChat = await Chat.create(chatData);
+
+      // Populate necessary fields for the new chat
+      const FullChat = await Chat.findOne({ _id: createdChat._id })
         .populate("users", "-password")
-        .populate("latestMessage");
-
-      // If chat exists, return it
-      if (isChat.length > 0) {
-        // Ensure that the latest message sender is populated
-        isChat = await User.populate(isChat, {
+        .populate("latestMessage")
+        .populate({
           path: "latestMessage.sender",
           select: "name profile_pic phone",
         });
-        return res.status(200).json({ FullChat: isChat[0], status: true });
-      } else {
-        // If chat doesn't exist, create it
-        const chatData = {
-          chatName: "sender",
-          isGroupChat: false,
-          users: [req.user._id, userId],
-        };
 
-        try {
-          const createdChat = await Chat.create(chatData);
-
-          // Populate necessary fields for the new chat
-          const FullChat = await Chat.findOne({ _id: createdChat._id })
-            .populate("users", "-password")
-            .populate("latestMessage")
-            .populate({
-              path: "latestMessage.sender",
-              select: "name profile_pic phone",
-            });
-
-          return res.status(200).json({ FullChat: FullChat, status: true });
-        } catch (error) {
-          res.status(400);
-          throw new Error(error.message);
-        }
-      }
+      return res.status(200).json({ FullChat: FullChat, status: true });
+    } catch (error) {
+      res.status(400);
+      throw new Error(error.message);
+    }
+  }
 });
 
 const chatDelete = asyncHandler(async (req, res) => {
@@ -160,12 +161,27 @@ const fetchChats = asyncHandler(async (req, res) => {
       select: "_id",
     });
 
-    // Modify the response to include sendId within the latestMessage object
+    // Decrypt the latestMessage content and modify the response
     const modifiedChats = populatedChats.map((chat) => {
       const chatObj = chat.toObject();
+
+      if (chatObj.latestMessage && chatObj.latestMessage.content) {
+        try {
+          const bytes = CryptoJS.AES.decrypt(
+            chatObj.latestMessage.content,
+            process.env.SECRET_KEY
+          );
+          const decryptedContent = bytes.toString(CryptoJS.enc.Utf8);
+          chatObj.latestMessage.content = decryptedContent; // Replace encrypted content with decrypted content
+        } catch (error) {
+          console.error("Error decrypting latestMessage:", error);
+        }
+      }
+
       if (chatObj.latestMessage && chatObj.latestMessage.sender) {
         chatObj.latestMessage.sendId = chatObj.latestMessage.sender._id;
       }
+
       return chatObj;
     });
 
@@ -304,7 +320,7 @@ const createGroupChat = asyncHandler(async (req, res) => {
         .populate("users", "-password")
         .populate("groupAdmin", "-password");
 
-      res.status(200).json(fullGroupChat);
+      res.status(200).json({ data: fullGroupChat, status: true });
     } catch (error) {
       res.status(400);
       throw new Error(error.message);
@@ -334,7 +350,7 @@ const renameGroup = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error("Chat Not Found");
   } else {
-    res.json(updatedChat);
+    res.json({ data: updatedChat, status: true });
   }
 });
 
@@ -362,7 +378,7 @@ const removeFromGroup = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error("Chat Not Found");
   } else {
-    res.json(removed);
+    res.json({ data: removed, status: true });
   }
 });
 
@@ -388,9 +404,9 @@ const addToGroup = asyncHandler(async (req, res) => {
 
   if (!added) {
     res.status(404);
-    throw new Error("Chat Not Found");
+    throw new Error({ message: "Chat Not Found", status: false });
   } else {
-    res.json(added);
+    res.json({ data: added, status: true });
   }
 });
 
@@ -402,5 +418,5 @@ module.exports = {
   addToGroup,
   removeFromGroup,
   getMyGroups,
-  chatDelete
+  chatDelete,
 };

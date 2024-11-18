@@ -7,16 +7,14 @@ const CryptoJS = require("crypto-js");
 
 const allMessages = asyncHandler(async (req, res) => {
   const userId = req.user._id;
-  const page = parseInt(req.query.page) || 1; // Default to page 1 if not provided
-  const limit = parseInt(req.query.limit) || 10; // Default to 10 messages per page
-  const search = req.query.search || "";
-  const { chatId } = req.body;
+  const { chatId, page = 1, limit = 10, search = "" } = req.body;
 
   try {
-
-      if (!chatId) {
-            return res.status(400).json({ message: "chatId is requires", status: false });
-      }
+    if (!chatId) {
+      return res
+        .status(400)
+        .json({ message: "chatId is requires", status: false });
+    }
     // Fetch messages matching the chat ID and not deleted for the user
     const query = {
       chat: chatId,
@@ -24,7 +22,7 @@ const allMessages = asyncHandler(async (req, res) => {
     };
 
     const messages = await Message.find(query)
-      .sort({ createdAt: -1 }) // Sort messages by creation date, newest first
+      .sort({ createdAt: 1 }) // Sort messages by creation date, newest first
       .skip((page - 1) * limit) // Skip messages for previous pages
       .limit(limit) // Limit to the specified number of messages
       .populate("chat");
@@ -45,7 +43,19 @@ const allMessages = asyncHandler(async (req, res) => {
           process.env.SECRET_KEY
         );
         const originalContent = bytes.toString(CryptoJS.enc.Utf8);
-        return { ...message.toObject(), content: originalContent }; // Replace encrypted with decrypted
+        // Format the createdAt field
+        const formattedDate = new Date(message.createdAt).toLocaleString(
+            "en-US", // Use your preferred locale
+            {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            }
+          );
+        return { ...message.toObject(), content: originalContent, createdAt: formattedDate, }; // Replace encrypted with decrypted
       })
       .filter((message) =>
         message.content.toLowerCase().includes(search.toLowerCase())
@@ -61,6 +71,7 @@ const allMessages = asyncHandler(async (req, res) => {
       limit,
       totalMessages,
       totalPages,
+      status: true
     });
   } catch (error) {
     res.status(400).json({ message: error.message, status: false });
@@ -126,7 +137,11 @@ const sendMessage = asyncHandler(async (req, res) => {
           latestMessage: message,
         });
 
-        res.json(message);
+        res.json({
+            message: "Message sent successfully",
+            status: true,
+            data: message, // Including the message object
+          });
       } catch (error) {
         res.status(400);
         throw new Error(error.message);
