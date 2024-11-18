@@ -4,6 +4,7 @@ const User = require("../models/userModel");
 const Chat = require("../models/chatModel");
 const { upload, checkTotalSize } = require("../middleware/uploadMiddleware.js");
 const CryptoJS = require("crypto-js");
+const moment = require("moment-timezone");
 
 const allMessages = asyncHandler(async (req, res) => {
   const userId = req.user._id;
@@ -35,6 +36,8 @@ const allMessages = asyncHandler(async (req, res) => {
       });
     }
 
+    const timezone = "Asia/Kolkata";
+
     // Decrypt and filter messages
     const filteredMessages = messages
       .map((message) => {
@@ -43,19 +46,12 @@ const allMessages = asyncHandler(async (req, res) => {
           process.env.SECRET_KEY
         );
         const originalContent = bytes.toString(CryptoJS.enc.Utf8);
-        // Format the createdAt field
-        const formattedDate = new Date(message.createdAt).toLocaleString(
-            "en-US", // Use your preferred locale
-            {
-              year: "numeric",
-              month: "short",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-            }
-          );
-        return { ...message.toObject(), content: originalContent, createdAt: formattedDate, }; // Replace encrypted with decrypted
+        return {
+          ...message.toObject(),
+          content: originalContent,
+          createdAt: moment(message.createdAt).tz(timezone).format(),
+          updatedAt: moment(message.updatedAt).tz(timezone).format(),
+        };
       })
       .filter((message) =>
         message.content.toLowerCase().includes(search.toLowerCase())
@@ -71,7 +67,7 @@ const allMessages = asyncHandler(async (req, res) => {
       limit,
       totalMessages,
       totalPages,
-      status: true
+      status: true,
     });
   } catch (error) {
     res.status(400).json({ message: error.message, status: false });
@@ -138,10 +134,10 @@ const sendMessage = asyncHandler(async (req, res) => {
         });
 
         res.json({
-            message: "Message sent successfully",
-            status: true,
-            data: message, // Including the message object
-          });
+          message: "Message sent successfully",
+          status: true,
+          data: message, // Including the message object
+        });
       } catch (error) {
         res.status(400);
         throw new Error(error.message);
