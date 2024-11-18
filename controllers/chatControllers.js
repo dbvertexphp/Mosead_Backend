@@ -179,7 +179,7 @@ const fetchChats = asyncHandler(async (req, res) => {
       }
 
       if (chatObj.latestMessage && chatObj.latestMessage.sender) {
-        chatObj.latestMessage.sendId = chatObj.latestMessage.sender._id;
+        chatObj.latestMessage.sender = chatObj.latestMessage.sender._id;
       }
 
       return chatObj;
