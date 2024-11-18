@@ -155,10 +155,22 @@ const fetchChats = asyncHandler(async (req, res) => {
     }
 
     // Populate latestMessage sender details
-    const populatedChats = await User.populate(chats);
+    const populatedChats = await User.populate(chats, {
+      path: "latestMessage.sender",
+      select: "_id",
+    });
+
+    // Modify the response to include sendId within the latestMessage object
+    const modifiedChats = populatedChats.map((chat) => {
+      const chatObj = chat.toObject();
+      if (chatObj.latestMessage && chatObj.latestMessage.sender) {
+        chatObj.latestMessage.sendId = chatObj.latestMessage.sender._id;
+      }
+      return chatObj;
+    });
 
     // Send response with chats and additional users
-    res.status(200).json({ chats: populatedChats, status: true });
+    res.status(200).json({ chats: modifiedChats, status: true });
   } catch (error) {
     console.error("Error fetching chats:", error);
     res.status(500).json({
