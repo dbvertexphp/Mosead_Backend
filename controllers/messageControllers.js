@@ -167,32 +167,39 @@ const clearMessages = asyncHandler(async (req, res) => {
 });
 
 const deleteMessageForMe = asyncHandler(async (req, res) => {
-  const { messageId } = req.body;
-  if (!messageId) {
-    return res
-      .status(400)
-      .json({ message: "Message Id is required", status: false });
-  }
-  try {
-    const message = await Message.findById(messageId);
-    if (!message) {
-      return res
-        .status(400)
-        .json({ message: "Message not found", status: false });
-    }
+      const { messageIds } = req.body;
+      if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
+        return res
+          .status(400)
+          .json({ message: "Message IDs are required and should be an array", status: false });
+      }
 
-    if (!message.deletedFor.includes(req.user._id)) {
-      message.deletedFor.push(req.user._id);
-      await message.save();
-    }
-    res.json({
-      message: "Message deleted for you successfully",
-      messageId: message._id,
-      status: true,
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message, status: false });
-  }
+      try {
+        const updatedMessages = [];
+
+        for (const messageId of messageIds) {
+          const message = await Message.findById(messageId);
+          if (!message) {
+            // Skip if message not found
+            continue;
+          }
+
+          // Add user to the 'deletedFor' array if not already included
+          if (!message.deletedFor.includes(req.user._id)) {
+            message.deletedFor.push(req.user._id);
+            await message.save();
+            updatedMessages.push(messageId);
+          }
+        }
+
+        res.json({
+          message: "Messages deleted for you successfully",
+          updatedMessageIds: updatedMessages, // List of successfully processed message IDs
+          status: true,
+        });
+      } catch (error) {
+        res.status(500).json({ message: error.message, status: false });
+      }
 });
 
 const deleteMessageForEveryone = asyncHandler(async (req, res) => {

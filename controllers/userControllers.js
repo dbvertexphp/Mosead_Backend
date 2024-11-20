@@ -1,7 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const User = require("../models/userModel");
 const generateToken = require("../config/generateToken");
-const  uploadFile  = require("../middleware/uploadCommanFile.js");
+const uploadFile = require("../middleware/uploadCommanFile.js");
 const { createConnectyCubeUser } = require("../utils/connectyCubeUtils.js");
 const cookie = require("cookie");
 
@@ -261,6 +261,30 @@ const getUserProfileData = asyncHandler(async (req, res) => {
   });
 });
 
+const getUserDataByCbId = asyncHandler(async (req, res) => {
+  const { cbId } = req.body; // Get the userID from the request header
+
+  if (!cbId) {
+    res.status(401);
+    throw new Error("cbId not Found");
+  }
+
+  // Find the user by ID
+  const user = await User.find({cb_id: cbId}).select("-password"); // Select all fields except password
+
+  if (!user) {
+    res.status(404);
+    throw new Error("User not found");
+  }
+
+  // Return the user profile data
+  res.status(200).json({
+    user: user,
+    status: true,
+    message: "User profile retrieved successfully",
+  });
+});
+
 const logoutUser = asyncHandler(async (req, res) => {
   const authHeader = req.headers.authorization;
 
@@ -403,4 +427,5 @@ module.exports = {
   logoutUser,
   getUserDetailsByPhones,
   getUserProfileData,
+  getUserDataByCbId
 };
