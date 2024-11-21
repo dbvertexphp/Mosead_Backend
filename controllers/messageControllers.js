@@ -24,11 +24,19 @@ const allMessages = asyncHandler(async (req, res) => {
     };
 
     const totalMessage = await Message.countDocuments(query);
-    const messages = await Message.find(query)
-      .sort({ createdAt: -1 }) // Sort messages by creation date, newest first
-      .skip(totalMessage - (page * limit)) // Skip messages for previous pages
-      .limit((page * limit)) // Limit to the specified number of messages
+      const skipMessages = page * limit;
+      const messages = await Message.find(query)
+      .sort({ createdAt: 1 }) // Sort messages by creation date, newest first
+      .skip(Math.max(0, totalMessage - skipMessages)) // Skip messages for previous pages
+      .limit(page * limit) // Limit to the specified number of messages
       .populate("chat");
+
+
+      // const messages = await Message.find(query)
+      // .sort({ createdAt: -1 }) // Sort messages by creation date, newest first
+      // .skip((page - 1) * limit) // Skip messages for previous pages
+      // .limit(limit) // Limit to the specified number of messages
+      // .populate("chat");
 
     // If no messages are found, return a message indicating so
     if (messages.length === 0) {
@@ -101,15 +109,20 @@ const sendMessage = asyncHandler(async (req, res) => {
         process.env.SECRET_KEY
       ).toString();
 
-      const currentTimestamp = moment().tz("Asia/Kolkata");
+      const currentDate = moment();
+      let istDate = currentDate.tz('Asia/Kolkata').format('YYYY-MM-DDTHH:mm:ss.SSSZ');
+
+
+      console.log(istDate);
+
 
       var newMessage = {
         sender: req.user._id,
         content: encryptedContent,
         chat: chatId,
         media: [],
-        createdAt: currentTimestamp, // Set createdAt explicitly
-        updatedAt: currentTimestamp,
+        createdAt: istDate, // Set createdAt explicitly
+        updatedAt: istDate,
       };
 
       // If media files are uploaded, save their paths to the newMessage object
