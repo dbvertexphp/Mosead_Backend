@@ -4,6 +4,8 @@ const User = require("../models/userModel");
 const Chat = require("../models/chatModel");
 const { upload, checkTotalSize } = require("../middleware/uploadMiddleware.js");
 const CryptoJS = require("crypto-js");
+const moment = require("moment-timezone");
+
 
 const allMessages = asyncHandler(async (req, res) => {
   const userId = req.user._id;
@@ -99,12 +101,15 @@ const sendMessage = asyncHandler(async (req, res) => {
         process.env.SECRET_KEY
       ).toString();
 
+      const currentTimestamp = moment().tz("Asia/Kolkata");
 
       var newMessage = {
         sender: req.user._id,
         content: encryptedContent,
         chat: chatId,
         media: [],
+        createdAt: currentTimestamp, // Set createdAt explicitly
+        updatedAt: currentTimestamp,
       };
 
       // If media files are uploaded, save their paths to the newMessage object
