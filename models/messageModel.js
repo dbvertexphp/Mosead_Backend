@@ -1,6 +1,5 @@
 const mongoose = require("mongoose");
 
-
 const messageSchema = mongoose.Schema(
   {
     sender: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
@@ -12,6 +11,14 @@ const messageSchema = mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Add a method to update timestamps
+messageSchema.methods.updateTimestamps = function () {
+  const currentDate = new Date();
+  this.createdAt = currentDate;
+  this.updatedAt = currentDate;
+  return this.save();
+};
 
 const Message = mongoose.model("Message", messageSchema);
 module.exports = Message;
