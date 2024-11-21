@@ -9,6 +9,8 @@ const messageSchema = mongoose.Schema(
     readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     media: [{ type: String }],
     deletedFor: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    createdAt: { type: Date, default: Date.now }, // Default to current time on creation
+    updatedAt: { type: Date, default: Date.now },
   },
 );
 
