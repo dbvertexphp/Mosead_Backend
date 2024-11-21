@@ -21,10 +21,11 @@ const allMessages = asyncHandler(async (req, res) => {
       deletedFor: { $nin: [userId] },
     };
 
+    const totalMessage = await Message.countDocuments(query);
     const messages = await Message.find(query)
       .sort({ createdAt: -1 }) // Sort messages by creation date, newest first
-      .skip((page - 1) * limit) // Skip messages for previous pages
-      .limit(limit) // Limit to the specified number of messages
+      .skip(totalMessage - (page * limit)) // Skip messages for previous pages
+      .limit((page * limit)) // Limit to the specified number of messages
       .populate("chat");
 
     // If no messages are found, return a message indicating so

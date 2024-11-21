@@ -10,7 +10,6 @@ const messageSchema = mongoose.Schema(
     media: [{ type: String }],
     deletedFor: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   },
-  { timestamps: true }
 );
 
 const Message = mongoose.model("Message", messageSchema);
