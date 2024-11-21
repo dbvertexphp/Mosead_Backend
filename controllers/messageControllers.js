@@ -98,11 +98,15 @@ const sendMessage = asyncHandler(async (req, res) => {
         process.env.SECRET_KEY
       ).toString();
 
+      const currentTimestamp = new Date();
+
       var newMessage = {
         sender: req.user._id,
         content: encryptedContent,
         chat: chatId,
         media: [],
+        createdAt: currentTimestamp, // Set createdAt explicitly
+        updatedAt: currentTimestamp,
       };
 
       // If media files are uploaded, save their paths to the newMessage object
