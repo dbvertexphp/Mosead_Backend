@@ -5,7 +5,8 @@ const {
   clearMessages,
   deleteMessageForMe,
   deleteMessageForEveryone,
-  clearAllMessages
+  clearAllMessages,
+  forwardMessage
 } = require("../controllers/messageControllers");
 const { protect } = require("../middleware/authMiddleware");
 
@@ -17,5 +18,6 @@ router.route("/clearMessages").post(protect, clearMessages);
 router.route("/deleteMessageForMe").post(protect, deleteMessageForMe);
 router.route("/deleteMessageForEveryone").post(protect, deleteMessageForEveryone);
 router.route("/clearAllMessages").post(protect, clearAllMessages);
+router.route("/forwardMessage").post(protect, forwardMessage);
 
 module.exports = router;

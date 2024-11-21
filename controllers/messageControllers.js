@@ -4,7 +4,6 @@ const User = require("../models/userModel");
 const Chat = require("../models/chatModel");
 const { upload, checkTotalSize } = require("../middleware/uploadMiddleware.js");
 const CryptoJS = require("crypto-js");
-const moment = require("moment-timezone");
 
 const allMessages = asyncHandler(async (req, res) => {
   const userId = req.user._id;
@@ -23,7 +22,7 @@ const allMessages = asyncHandler(async (req, res) => {
     };
 
     const messages = await Message.find(query)
-      .sort({ createdAt: 1 }) // Sort messages by creation date, newest first
+      .sort({ createdAt: -1 }) // Sort messages by creation date, newest first
       .skip((page - 1) * limit) // Skip messages for previous pages
       .limit(limit) // Limit to the specified number of messages
       .populate("chat");
@@ -36,8 +35,6 @@ const allMessages = asyncHandler(async (req, res) => {
       });
     }
 
-    const timezone = "Asia/Kolkata";
-
     // Decrypt and filter messages
     const filteredMessages = messages
       .map((message) => {
@@ -49,8 +46,6 @@ const allMessages = asyncHandler(async (req, res) => {
         return {
           ...message.toObject(),
           content: originalContent,
-          createdAt: moment(message.createdAt).tz(timezone).format(),
-          updatedAt: moment(message.updatedAt).tz(timezone).format(),
         };
       })
       .filter((message) =>
@@ -133,10 +128,15 @@ const sendMessage = asyncHandler(async (req, res) => {
           latestMessage: message,
         });
 
+        const response = {
+          ...message.toObject(),
+          sender: message.sender._id,
+        };
+
         res.json({
           message: "Message sent successfully",
           status: true,
-          data: message, // Including the message object
+          data: response, // Including the message object
         });
       } catch (error) {
         res.status(400);
@@ -167,39 +167,40 @@ const clearMessages = asyncHandler(async (req, res) => {
 });
 
 const deleteMessageForMe = asyncHandler(async (req, res) => {
-      const { messageIds } = req.body;
-      if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
-        return res
-          .status(400)
-          .json({ message: "Message IDs are required and should be an array", status: false });
+  const { messageIds } = req.body;
+  if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
+    return res.status(400).json({
+      message: "Message IDs are required and should be an array",
+      status: false,
+    });
+  }
+
+  try {
+    const updatedMessages = [];
+
+    for (const messageId of messageIds) {
+      const message = await Message.findById(messageId);
+      if (!message) {
+        // Skip if message not found
+        continue;
       }
 
-      try {
-        const updatedMessages = [];
-
-        for (const messageId of messageIds) {
-          const message = await Message.findById(messageId);
-          if (!message) {
-            // Skip if message not found
-            continue;
-          }
-
-          // Add user to the 'deletedFor' array if not already included
-          if (!message.deletedFor.includes(req.user._id)) {
-            message.deletedFor.push(req.user._id);
-            await message.save();
-            updatedMessages.push(messageId);
-          }
-        }
-
-        res.json({
-          message: "Messages deleted for you successfully",
-          updatedMessageIds: updatedMessages, // List of successfully processed message IDs
-          status: true,
-        });
-      } catch (error) {
-        res.status(500).json({ message: error.message, status: false });
+      // Add user to the 'deletedFor' array if not already included
+      if (!message.deletedFor.includes(req.user._id)) {
+        message.deletedFor.push(req.user._id);
+        await message.save();
+        updatedMessages.push(messageId);
       }
+    }
+
+    res.json({
+      message: "Messages deleted for you successfully",
+      updatedMessageIds: updatedMessages, // List of successfully processed message IDs
+      status: true,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message, status: false });
+  }
 });
 
 const deleteMessageForEveryone = asyncHandler(async (req, res) => {
@@ -265,6 +266,88 @@ const clearAllMessages = asyncHandler(async (req, res) => {
   }
 });
 
+const forwardMessage = asyncHandler(async (req, res) => {
+  const { messageIds, userIds } = req.body;
+  // Validate input
+  if (
+    !messageIds ||
+    !userIds ||
+    !Array.isArray(messageIds) ||
+    !Array.isArray(userIds)
+  ) {
+    return res.status(400).json({
+      message: "Invalid input. messageIds and userIds must be arrays.",
+      status: false,
+    });
+  }
+
+  try {
+    // Fetch messages to forward
+    const messages = await Message.find({ _id: { $in: messageIds } })
+      .populate("chat")
+      .populate("sender", "name profile_pic");
+
+    if (!messages.length) {
+      return res.status(404).json({
+        message: "No messages found to forward.",
+        status: false,
+      });
+    }
+
+    const newMessages = [];
+
+    // Process each message and forward to each user
+    for (const message of messages) {
+      const decryptedContent = CryptoJS.AES.decrypt(
+        message.content,
+        process.env.SECRET_KEY
+      ).toString(CryptoJS.enc.Utf16);
+
+      for (const userId of userIds) {
+        const newMessage = {
+          sender: req.user._id,
+          content: CryptoJS.AES.encrypt(
+            decryptedContent,
+            process.env.SECRET_KEY
+          ).toString(), // Re-encrypt for forwarding
+          chat: message.chat._id,
+          media: message.media, // Forward media if any
+        };
+
+        const createdMessage = await Message.create(newMessage);
+
+        // Populate the new message fields
+        const populatedMessage = await createdMessage
+          .populate("sender", "name profile_pic")
+          .execPopulate();
+        await populatedMessage.populate("chat").execPopulate();
+
+        // Add to the response array
+        newMessages.push({
+          ...populatedMessage.toObject(),
+          sender: populatedMessage.sender._id, // Only include sender ID
+        });
+
+        // Update the chat with the latest message
+        await Chat.findByIdAndUpdate(message.chat._id, {
+          latestMessage: createdMessage,
+        });
+      }
+    }
+
+    res.status(201).json({
+      message: "Messages forwarded successfully.",
+      status: true,
+      data: newMessages,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: error.message || "An error occurred while forwarding messages.",
+      status: false,
+    });
+  }
+});
+
 module.exports = {
   allMessages,
   sendMessage,
@@ -272,4 +355,5 @@ module.exports = {
   deleteMessageForMe,
   deleteMessageForEveryone,
   clearAllMessages,
+  forwardMessage,
 };
