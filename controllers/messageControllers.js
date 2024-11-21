@@ -81,89 +81,86 @@ const allMessages = asyncHandler(async (req, res) => {
 });
 
 const sendMessage = asyncHandler(async (req, res) => {
-  req.uploadPath = "uploads/media";
+      req.uploadPath = "uploads/media";
 
-  upload(req, res, async (err) => {
-    if (err) {
-      if (err.code === "LIMIT_FILE_SIZE") {
-        return res.status(400).json({
-          message: "File too large. Maximum size per file is 16 MB.",
-          status: false,
+      upload(req, res, async (err) => {
+        if (err) {
+          if (err.code === "LIMIT_FILE_SIZE") {
+            return res.status(400).json({
+              message: "File too large. Maximum size per file is 16 MB.",
+              status: false,
+            });
+          }
+          return res.status(400).json({ message: err.message });
+        }
+
+        // Check total size of all uploaded files
+        checkTotalSize(req, res, async () => {
+          const { content, chatId } = req.body;
+
+          // Check if chatId is present, if not, return an error
+          if (!chatId) {
+            console.log("Chat ID is required");
+            return res.sendStatus(400);
+          }
+
+          // Encrypt content if it's provided, otherwise set it to an empty string
+          let encryptedContent = "";
+          if (content) {
+            encryptedContent = CryptoJS.AES.encrypt(content, process.env.SECRET_KEY).toString();
+          }
+
+          const currentDate = moment();
+          let istDate = currentDate.tz('Asia/Kolkata').format('YYYY-MM-DDTHH:mm:ss.SSSZ');
+
+          var newMessage = {
+            sender: req.user._id,
+            content: encryptedContent,  // If content is empty, it will remain an empty string
+            chat: chatId,
+            media: [],
+            createdAt: istDate,
+            updatedAt: istDate,
+          };
+
+          // If media files are uploaded, save their paths to the newMessage object
+          if (req.files && req.files.length > 0) {
+            req.files.forEach((file) => {
+              newMessage.media.push(`${req.uploadPath}/${file.filename}`); // Save the media file paths
+            });
+          }
+
+          try {
+            var message = await Message.create(newMessage);
+
+            message = await message
+              .populate("sender", "name profile_pic")
+              .execPopulate();
+            message = await message.populate("chat").execPopulate();
+            message = await User.populate(message, {
+              path: "chat.users",
+              select: "name profile_pic phone",
+            });
+
+            await Chat.findByIdAndUpdate(req.body.chatId, {
+              latestMessage: message,
+            });
+
+            const response = {
+              ...message.toObject(),
+              sender: message.sender._id,
+            };
+
+            res.json({
+              message: "Message sent successfully",
+              status: true,
+              data: response, // Including the message object
+            });
+          } catch (error) {
+            res.status(400);
+            throw new Error(error.message);
+          }
         });
-      }
-      return res.status(400).json({ message: err.message });
-    }
-
-    // Check total size of all uploaded files
-    checkTotalSize(req, res, async () => {
-      const { content, chatId } = req.body;
-
-      if (!content || !chatId) {
-        console.log("Invalid data passed into request");
-        return res.sendStatus(400);
-      }
-
-      // Encrypt the content
-      const encryptedContent = CryptoJS.AES.encrypt(
-        content,
-        process.env.SECRET_KEY
-      ).toString();
-
-      const currentDate = moment();
-      let istDate = currentDate.tz('Asia/Kolkata').format('YYYY-MM-DDTHH:mm:ss.SSSZ');
-
-
-      console.log(istDate);
-
-
-      var newMessage = {
-        sender: req.user._id,
-        content: encryptedContent,
-        chat: chatId,
-        media: [],
-        createdAt: istDate, // Set createdAt explicitly
-        updatedAt: istDate,
-      };
-
-      // If media files are uploaded, save their paths to the newMessage object
-      if (req.files && req.files.length > 0) {
-        req.files.forEach((file) => {
-          newMessage.media.push(`${req.uploadPath}/${file.filename}`); // Save the media file paths
-        });
-      }
-
-      try {
-        var message = await Message.create(newMessage);
-
-        message = await message
-          .populate("sender", "name profile_pic")
-          .execPopulate();
-        message = await message.populate("chat").execPopulate();
-        message = await User.populate(message, {
-          path: "chat.users",
-          select: "name profile_pic phone",
-        });
-
-        await Chat.findByIdAndUpdate(req.body.chatId, {
-          latestMessage: message,
-        });
-
-        const response = {
-          ...message.toObject(),
-          sender: message.sender._id,
-        };
-
-        res.json({
-          message: "Message sent successfully",
-          status: true,
-          data: response, // Including the message object
-        });
-      } catch (error) {
-        res.status(400);
-        throw new Error(error.message);
-      }
-    });
-  });
+      });
 });
 
 const clearMessages = asyncHandler(async (req, res) => {
