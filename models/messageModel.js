@@ -1,4 +1,6 @@
 const mongoose = require("mongoose");
+const moment = require("moment-timezone");
+
 
 
 const messageSchema = mongoose.Schema(
@@ -13,6 +15,19 @@ const messageSchema = mongoose.Schema(
     updatedAt: { type: Date, default: Date.now },
   },
 );
+
+// Pre-save hook to set timestamps in Asia/Kolkata timezone before saving
+messageSchema.pre('save', function(next) {
+      const indiaTime = moment.tz("Asia/Kolkata");
+
+      // Update createdAt and updatedAt to IST (Asia/Kolkata)
+      if (!this.createdAt) {
+        this.createdAt = indiaTime.toDate();
+      }
+      this.updatedAt = indiaTime.toDate();
+
+      next();
+    });
 
 const Message = mongoose.model("Message", messageSchema);
 module.exports = Message;
