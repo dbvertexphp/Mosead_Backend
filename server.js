@@ -31,10 +31,10 @@ app.use("/api/app", companyDetails);
 
 const __dirname1 = path.resolve();
 app.use(express.static(path.join(__dirname1, "")));
-// app.use("/uploads", express.static("uploads"));
-// app.use("/uploads", express.static("uploads/profiles"));
-// app.use("/uploads", express.static("uploads/media"));
-// app.use("/uploads", express.static("uploads/group"));
+app.use("/uploads", express.static("uploads"));
+app.use("/uploads", express.static("uploads/profiles"));
+app.use("/uploads", express.static("uploads/media"));
+app.use("/uploads", express.static("uploads/group"));
 
 
 
