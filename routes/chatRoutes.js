@@ -7,7 +7,8 @@ const {
   addToGroup,
   renameGroup,
   getMyGroups,
-  chatDelete
+  chatDelete,
+  reportGroupChat
 } = require("../controllers/chatControllers");
 const { protect } = require("../middleware/authMiddleware");
 
@@ -15,6 +16,7 @@ const router = express.Router();
 
 router.route("/accessChat").post(protect, accessChat);
 router.route("/chatDelete").post(protect, chatDelete);
+router.route("/reportGroupChat").post(protect, reportGroupChat);
 router.route("/fetchChats").get(protect, fetchChats);
 router.route("/getMyGroups").get(protect, getMyGroups);
 router.route("/group").post(protect, createGroupChat);

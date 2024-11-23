@@ -3,6 +3,7 @@ const Chat = require("../models/chatModel");
 const User = require("../models/userModel");
 const uploadFile = require("../middleware/uploadCommanFile");
 const CryptoJS = require("crypto-js");
+const GroupReport = require("../models/reportGroupModel");
 
 //@description     Create or fetch One to One Chat
 //@route           POST /api/chat/
@@ -312,7 +313,7 @@ const createGroupChat = asyncHandler(async (req, res) => {
         chatName: req.body.name,
         users: users,
         isGroupChat: true,
-        groupAdmin: req.user,
+        groupAdmin: req.user._id,
         group_picture: group_picture,
       });
 
@@ -410,6 +411,40 @@ const addToGroup = asyncHandler(async (req, res) => {
   }
 });
 
+// Report Group Chat API
+const reportGroupChat = asyncHandler(async (req, res) => {
+  const { chatId, reason } = req.body;
+
+  // Validation
+  if (!chatId || !reason) {
+    return res
+      .status(400)
+      .json({ message: "Group ID and reason are required" });
+  }
+
+  try {
+    // Check if the group exists
+    const groupChat = await Chat.findById(chatId);
+    if (!groupChat) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+
+    // Create a report
+    const report = await GroupReport.create({
+      chatId,
+      reportedBy: req.user._id,
+      reason,
+    });
+
+    res.status(201).json({
+      message: "Group chat reported successfully",
+      data: report,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 module.exports = {
   accessChat,
   fetchChats,
@@ -419,4 +454,5 @@ module.exports = {
   removeFromGroup,
   getMyGroups,
   chatDelete,
+  reportGroupChat
 };

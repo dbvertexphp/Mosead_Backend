@@ -21,7 +21,6 @@ app.use(express.json()); // to accept json data
 
 app.use(cookieParser());
 
-
 app.use("/api/user", userRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/message", messageRoutes);
@@ -35,8 +34,6 @@ app.use("/uploads", express.static("uploads"));
 app.use("/uploads", express.static("uploads/profiles"));
 app.use("/uploads", express.static("uploads/media"));
 app.use("/uploads", express.static("uploads/group"));
-
-
 
 if (process.env.NODE_ENV == "production") {
   app.use(express.static(path.join(__dirname1, "/view")));
@@ -74,18 +71,25 @@ const io = require("socket.io")(server, {
 io.on("connection", (socket) => {
   console.log("Connected to socket.io");
   socket.on("setup", (userData) => {
-    socket.join(userData._id);
-    socket.emit("connected");
+    socket.join(userData.userId);
+    socket.emit("connected",userData);
   });
 
-  socket.on("join chat", (room) => {
-    socket.join(room);
-    console.log("User Joined Room: " + room);
+  socket.on("joinChat", (room) => {
+    socket.join(room.chatId);
+    console.log("User Joined Room: " + room.chatId);
+    socket.emit("joined", room);
   });
-  socket.on("typing", (room) => socket.in(room).emit("typing"));
-  socket.on("stop typing", (room) => socket.in(room).emit("stop typing"));
+  socket.on("typing", (room) => {
+    socket.in(room.chatId);
+    socket.emit("typing", room);
+  });
+  socket.on("stopTyping", (room) => {
+    socket.in(room.chatId);
+    socket.emit("stopTyping", room)
+  });
 
-  socket.on("new message", (newMessageRecieved) => {
+  socket.on("newMessage", (newMessageRecieved) => {
     var chat = newMessageRecieved.chat;
 
     if (!chat.users) return console.log("chat.users not defined");
@@ -93,8 +97,7 @@ io.on("connection", (socket) => {
     chat.users.forEach((user) => {
       if (user._id == newMessageRecieved.sender._id) return;
 
-      socket.in(user._id).emit("message recieved", newMessageRecieved);
-
+      socket.in(user._id).emit("messageRecieved", newMessageRecieved);
     });
   });
 
