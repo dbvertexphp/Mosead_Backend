@@ -2,6 +2,7 @@ const asyncHandler = require("express-async-handler");
 const Message = require("../models/messageModel");
 const User = require("../models/userModel");
 const Chat = require("../models/chatModel");
+const CallHistory = require("../models/callHistoryModel.js");
 const { upload, checkTotalSize } = require("../middleware/uploadMiddleware.js");
 const CryptoJS = require("crypto-js");
 const moment = require("moment-timezone");
@@ -101,7 +102,6 @@ const sendMessage = asyncHandler(async (req, res) => {
         console.log("Chat ID is required");
         return res.sendStatus(400);
       }
-
       // Encrypt content if it's provided, otherwise set it to an empty string
       let encryptedContent = "";
       if (content) {
@@ -164,6 +164,70 @@ const sendMessage = asyncHandler(async (req, res) => {
       }
     });
   });
+});
+
+const saveCallHistory = asyncHandler(async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { call, chatId, duration } = req.body;
+
+    // Validation
+    if (!chatId || !call || !duration) {
+      return res.status(400).json({ message: "All Fields is required" });
+    }
+
+    const currentDate = moment();
+    let istDate = currentDate
+      .tz("Asia/Kolkata")
+      .format("YYYY-MM-DDTHH:mm:ss.SSSZ");
+
+    const callHistory = new CallHistory({
+      sender: userId,
+      chat: chatId,
+      call: call,
+      duration: duration,
+      createdAt: istDate,
+      updatedAt: istDate,
+    });
+
+    const savedCallHistory = await callHistory.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Call history saved successfully",
+      data: savedCallHistory,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while saving call history",
+      error: error.message,
+    });
+  }
+});
+
+const getAllCallHistoryByUser = asyncHandler(async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    // Fetch call history for the logged-in user
+    const callHistories = await CallHistory.find({ sender: userId })
+      .populate("sender", "name phone profile_pic")
+      .populate("chat")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      message: "User's call history retrieved successfully",
+      data: callHistories,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while retrieving user's call history",
+      error: error.message,
+    });
+  }
 });
 
 const clearMessages = asyncHandler(async (req, res) => {
@@ -383,4 +447,6 @@ module.exports = {
   deleteMessageForEveryone,
   clearAllMessages,
   forwardMessage,
+  saveCallHistory,
+  getAllCallHistoryByUser
 };

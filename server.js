@@ -87,21 +87,14 @@ io.on("connection", (socket) => {
     socket.emit("joined", room);
   });
   socket.on("typing", (room) => {
-    socket.to(room.chatId).emit("typing", room);
+    socket.to(room).emit("typing", room);
   });
   socket.on("stopTyping", (room) => {
-    socket.to(room.chatId).emit("stopTyping", room);
+    socket.to(room).emit("stopTyping", room);
   });
 
   socket.on("newMessage", (newMessageRecieved) => {
-    var chat = newMessageRecieved.chat;
-
-    if (!chat.users) return console.log("chat.users not defined");
-
-    chat.users.forEach((user) => {
-      if (user._id == newMessageRecieved.sender) return;
-      socket.to(user._id).emit("messageRecieved", newMessageRecieved);
-    });
+      socket.to(newMessageRecieved.chatId).emit("messageRecieved", newMessageRecieved);
   });
 
   socket.on("messageRead", async ({ messageId, userId }) => {
