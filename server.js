@@ -8,6 +8,7 @@ const { companyDetails } = require("./routes/companydetailsRoutes.js");
 const { notFound, errorHandler } = require("./middleware/errorMiddleware");
 const path = require("path");
 const cookieParser = require("cookie-parser");
+const Message = require("./models/messageModel.js");
 
 dotenv.config();
 connectDB();
@@ -68,11 +69,16 @@ const io = require("socket.io")(server, {
   },
 });
 
+const onlineUsers = new Map();
+
 io.on("connection", (socket) => {
   console.log("Connected to socket.io");
   socket.on("setup", (userData) => {
     socket.join(userData.userId);
-    socket.emit("connected",userData);
+    onlineUsers.set(userData.userId, socket.id);
+    console.log(`${userData.userId} is online`);
+    io.emit("userOnline", userData);
+    socket.emit("connected", userData);
   });
 
   socket.on("joinChat", (room) => {
@@ -81,12 +87,10 @@ io.on("connection", (socket) => {
     socket.emit("joined", room);
   });
   socket.on("typing", (room) => {
-    socket.in(room.chatId);
-    socket.emit("typing", room);
+    socket.to(room.chatId).emit("typing", room);
   });
   socket.on("stopTyping", (room) => {
-    socket.in(room.chatId);
-    socket.emit("stopTyping", room)
+    socket.to(room.chatId).emit("stopTyping", room);
   });
 
   socket.on("newMessage", (newMessageRecieved) => {
@@ -95,14 +99,54 @@ io.on("connection", (socket) => {
     if (!chat.users) return console.log("chat.users not defined");
 
     chat.users.forEach((user) => {
-      if (user._id == newMessageRecieved.sender._id) return;
-
-      socket.in(user._id).emit("messageRecieved", newMessageRecieved);
+      if (user._id == newMessageRecieved.sender) return;
+      socket.to(user._id).emit("messageRecieved", newMessageRecieved);
     });
   });
 
-  socket.off("setup", () => {
+  socket.on("messageRead", async ({ messageId, userId }) => {
+    try {
+      // Find the message by ID and add the userId to the 'readBy' array if not already there
+      const message = await Message.findById(messageId)
+        .populate("sender", "-password")
+        .populate("chat");
+
+      if (!message) {
+        return console.log("Message not found");
+      }
+
+      // Add userId to the 'readBy' array if it isn't already present
+      if (!message.readBy.includes(userId)) {
+        message.readBy.push(userId);
+        await message.save(); // Save the updated message with new 'readBy' list
+      }
+
+      // Emit message read confirmation to all users in the chat except the one who read it
+      const chat = message.chat;
+      chat.users.forEach((user) => {
+        if (user._id.toString() === userId.toString()) return; // Skip the user who read the message
+        socket.in(user._id);
+        socket.emit("messageReadConfirmation", message);
+      });
+    } catch (error) {
+      console.log("Error in messageRead event: ", error.message);
+    }
+  });
+
+  socket.on("setOffline", (userData) => {
+    if (onlineUsers.has(userData.userId)) {
+      onlineUsers.delete(userData.userId);
+      console.log(`${userData.userId} is manually set to offline`);
+      io.emit("userOffline", userData);
+    }
+  });
+
+  socket.off("setup", (userData) => {
     console.log("USER DISCONNECTED");
-    socket.leave(userData._id);
+    socket.leave(userData.userId);
+    if (onlineUsers.has(userData.userId)) {
+      onlineUsers.delete(userData.userId);
+      io.emit("userOffline", userData.userId);
+    }
   });
 });
