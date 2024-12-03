@@ -102,13 +102,11 @@ io.on("connection", (socket) => {
   });
 
   socket.on("newMessage", (newMessageRecieved) => {
-    socket.to(newMessageRecieved.chatId);
-    socket.emit("messageRecieved", newMessageRecieved);
+    socket.to(newMessageRecieved.chatId).emit("messageRecieved", newMessageRecieved);
   });
 
   socket.on("messageRead", async ({ messageId, userId }) => {
     try {
-      // Find the message by ID and add the userId to the 'readBy' array if not already there
       const message = await Message.findById(messageId)
         .populate("sender", "-password")
         .populate("chat");
@@ -116,17 +114,13 @@ io.on("connection", (socket) => {
       if (!message) {
         return console.log("Message not found");
       }
-
-      // Add userId to the 'readBy' array if it isn't already present
       if (!message.readBy.includes(userId)) {
         message.readBy.push(userId);
-        await message.save(); // Save the updated message with new 'readBy' list
+        await message.save();
       }
-
-      // Emit message read confirmation to all users in the chat except the one who read it
       const chat = message.chat;
       chat.users.forEach((user) => {
-        if (user._id.toString() === userId.toString()) return; // Skip the user who read the message
+        if (user._id.toString() === userId.toString()) return;
         socket.in(user._id);
         socket.emit("messageReadConfirmation", message);
       });
