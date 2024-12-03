@@ -9,6 +9,8 @@ const { notFound, errorHandler } = require("./middleware/errorMiddleware");
 const path = require("path");
 const cookieParser = require("cookie-parser");
 const Message = require("./models/messageModel.js");
+const User = require("./models/userModel.js");
+const moment = require("moment-timezone");
 
 dotenv.config();
 connectDB();
@@ -73,10 +75,16 @@ const onlineUsers = new Map();
 
 io.on("connection", (socket) => {
   console.log("Connected to socket.io");
-  socket.on("setup", (userData) => {
+  socket.on("setup", async (userData) => {
     socket.join(userData.userId);
     onlineUsers.set(userData.userId, socket.id);
     console.log(`${userData.userId} is online`);
+    // Update the user's online status in the database
+    await User.findByIdAndUpdate(
+      userData.userId,
+      { status: "Online" },
+      { new: true }
+    );
     io.emit("userOnline", userData);
     socket.emit("connected", userData);
   });
@@ -94,7 +102,8 @@ io.on("connection", (socket) => {
   });
 
   socket.on("newMessage", (newMessageRecieved) => {
-      socket.to(newMessageRecieved.chatId).emit("messageRecieved", newMessageRecieved);
+    socket.to(newMessageRecieved.chatId);
+    socket.emit("messageRecieved", newMessageRecieved);
   });
 
   socket.on("messageRead", async ({ messageId, userId }) => {
@@ -126,19 +135,36 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("setOffline", (userData) => {
+  socket.on("setOffline", async (userData) => {
     if (onlineUsers.has(userData.userId)) {
       onlineUsers.delete(userData.userId);
+      const currentDate = moment();
+      let istDate = currentDate
+        .tz("Asia/Kolkata")
+        .format("YYYY-MM-DDTHH:mm:ss.SSSZ");
+      await User.findByIdAndUpdate(
+        userData.userId,
+        { status: istDate },
+        { new: true }
+      );
       console.log(`${userData.userId} is manually set to offline`);
       io.emit("userOffline", userData);
     }
   });
 
-  socket.off("setup", (userData) => {
+  socket.off("setup", async (userData) => {
     console.log("USER DISCONNECTED");
     socket.leave(userData.userId);
     if (onlineUsers.has(userData.userId)) {
       onlineUsers.delete(userData.userId);
+      let istDate = currentDate
+        .tz("Asia/Kolkata")
+        .format("YYYY-MM-DDTHH:mm:ss.SSSZ");
+      await User.findByIdAndUpdate(
+        userData.userId,
+        { status: istDate },
+        { new: true }
+      );
       io.emit("userOffline", userData.userId);
     }
   });

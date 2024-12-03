@@ -148,6 +148,8 @@ const sendMessage = asyncHandler(async (req, res) => {
           latestMessage: message,
         });
 
+        message.content = decryptedContent(message.content);
+
         const response = {
           ...message.toObject(),
           sender: message.sender._id,
@@ -165,6 +167,22 @@ const sendMessage = asyncHandler(async (req, res) => {
     });
   });
 });
+
+const decryptedContent = (encryptedContent) => {
+      if (!encryptedContent || encryptedContent === "") {
+        return ""; // Return empty string if no content is encrypted or if it's empty
+      }
+
+      const bytes = CryptoJS.AES.decrypt(encryptedContent, process.env.SECRET_KEY);
+      const originalContent = bytes.toString(CryptoJS.enc.Utf8);
+
+      // Check if decryption result is empty, in case of invalid decryption
+      if (!originalContent) {
+        return ""; // You can also return an error or a custom message if needed
+      }
+
+      return originalContent;
+};
 
 const saveCallHistory = asyncHandler(async (req, res) => {
   try {

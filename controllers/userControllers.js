@@ -186,7 +186,6 @@ const updateProfile = asyncHandler(async (req, res) => {
       throw new Error("User not found");
     }
 
-    const phoneNumber = String(phone);
 
     const password = "mosead_" + String(phone) + "28";
 
@@ -196,7 +195,7 @@ const updateProfile = asyncHandler(async (req, res) => {
     if (!user.cb_id) {
       const { id } = await createConnectyCubeUser(
         phoneString,
-        phoneNumber,
+        phone,
         password,
         name,
         user.role

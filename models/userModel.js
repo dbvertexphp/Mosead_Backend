@@ -39,6 +39,10 @@ const userSchema = mongoose.Schema({
       },
     ],
   },
+  status: {
+    type: String,
+    default: "Online",
+  },
   datetime: {
     type: String,
     default: () => moment().tz("Asia/Kolkata").format("YYYY-MMM-DD hh:mm:ss A"),
