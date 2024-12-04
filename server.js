@@ -120,11 +120,9 @@ io.on("connection", (socket) => {
         message.readBy.push(userId);
         await message.save();
       }
-      const chat = message.chat;
-      chat.users.forEach((user) => {
-        if (user._id.toString() === userId.toString()) return;
-        socket.in(user._id).emit("messageReadConfirmation", message);
-      });
+      socket.in(userId).emit("messageReadConfirmation", message);
+      console.log(messageId);
+      console.log(message);
     } catch (error) {
       console.log("Error in messageRead event: ", error.message);
     }
