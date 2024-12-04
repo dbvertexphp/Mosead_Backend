@@ -39,6 +39,14 @@ const allMessages = asyncHandler(async (req, res) => {
       });
     }
 
+    // Update the `readBy` field for messages if `userId` is not already included
+    for (const message of messages) {
+      if (!message.readBy.includes(userId)) {
+        message.readBy.push(userId);
+        await message.save(); // Save the updated message
+      }
+    }
+
     // Decrypt and filter messages
     const filteredMessages = messages
       .map((message) => {
@@ -115,6 +123,7 @@ const sendMessage = asyncHandler(async (req, res) => {
         content: encryptedContent, // If content is empty, it will remain an empty string
         chat: chatId,
         media: [],
+        readBy: [req.user._id],
         createdAt: istDate,
         updatedAt: istDate,
       };
@@ -163,19 +172,19 @@ const sendMessage = asyncHandler(async (req, res) => {
 });
 
 const decryptedContent = (encryptedContent) => {
-      if (!encryptedContent || encryptedContent === "") {
-        return ""; // Return empty string if no content is encrypted or if it's empty
-      }
+  if (!encryptedContent || encryptedContent === "") {
+    return ""; // Return empty string if no content is encrypted or if it's empty
+  }
 
-      const bytes = CryptoJS.AES.decrypt(encryptedContent, process.env.SECRET_KEY);
-      const originalContent = bytes.toString(CryptoJS.enc.Utf8);
+  const bytes = CryptoJS.AES.decrypt(encryptedContent, process.env.SECRET_KEY);
+  const originalContent = bytes.toString(CryptoJS.enc.Utf8);
 
-      // Check if decryption result is empty, in case of invalid decryption
-      if (!originalContent) {
-        return ""; // You can also return an error or a custom message if needed
-      }
+  // Check if decryption result is empty, in case of invalid decryption
+  if (!originalContent) {
+    return ""; // You can also return an error or a custom message if needed
+  }
 
-      return originalContent;
+  return originalContent;
 };
 
 const saveCallHistory = asyncHandler(async (req, res) => {
@@ -300,55 +309,54 @@ const deleteMessageForMe = asyncHandler(async (req, res) => {
 });
 
 const deleteMessageForEveryone = asyncHandler(async (req, res) => {
-      const { messageIds } = req.body;
+  const { messageIds } = req.body;
 
-      // Validate messageIds
-      if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
-        return res.status(400).json({
-          message: "Message IDs are required and should be an array",
-          status: false,
-        });
-      }
-
-      try {
-        const failedDeletes = [];
-        const successfulDeletes = [];
-
-        // Loop through each messageId
-        for (const messageId of messageIds) {
-          const message = await Message.findById(messageId);
-
-          // If the message does not exist, add it to failedDeletes and continue
-          if (!message) {
-            failedDeletes.push({ messageId, reason: "Message not found" });
-            continue;
-          }
-
-          // Ensure only the sender can delete the message for everyone
-          if (message.sender.toString() !== req.user._id.toString()) {
-            failedDeletes.push({
-              messageId,
-              reason: "Not authorized to delete this message"
-            });
-            continue;
-          }
-
-          // Delete the message from the database
-          await Message.deleteOne({ _id: messageId });
-          successfulDeletes.push(messageId);
-        }
-
-        res.json({
-          message: "Messages processed for deletion",
-          successfulDeletes,
-          failedDeletes,
-          status: true,
-        });
-      } catch (error) {
-        res.status(500).json({ message: error.message, status: false });
-      }
+  // Validate messageIds
+  if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
+    return res.status(400).json({
+      message: "Message IDs are required and should be an array",
+      status: false,
     });
+  }
 
+  try {
+    const failedDeletes = [];
+    const successfulDeletes = [];
+
+    // Loop through each messageId
+    for (const messageId of messageIds) {
+      const message = await Message.findById(messageId);
+
+      // If the message does not exist, add it to failedDeletes and continue
+      if (!message) {
+        failedDeletes.push({ messageId, reason: "Message not found" });
+        continue;
+      }
+
+      // Ensure only the sender can delete the message for everyone
+      if (message.sender.toString() !== req.user._id.toString()) {
+        failedDeletes.push({
+          messageId,
+          reason: "Not authorized to delete this message",
+        });
+        continue;
+      }
+
+      // Delete the message from the database
+      await Message.deleteOne({ _id: messageId });
+      successfulDeletes.push(messageId);
+    }
+
+    res.json({
+      message: "Messages processed for deletion",
+      successfulDeletes,
+      failedDeletes,
+      status: true,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message, status: false });
+  }
+});
 
 const clearAllMessages = asyncHandler(async (req, res) => {
   const { chatId } = req.body;
@@ -474,5 +482,5 @@ module.exports = {
   clearAllMessages,
   forwardMessage,
   saveCallHistory,
-  getAllCallHistoryByUser
+  getAllCallHistoryByUser,
 };

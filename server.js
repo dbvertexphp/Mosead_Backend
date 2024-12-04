@@ -123,8 +123,7 @@ io.on("connection", (socket) => {
       const chat = message.chat;
       chat.users.forEach((user) => {
         if (user._id.toString() === userId.toString()) return;
-        socket.in(user._id);
-        socket.emit("messageReadConfirmation", message);
+        socket.in(user._id).emit("messageReadConfirmation", message);
       });
     } catch (error) {
       console.log("Error in messageRead event: ", error.message);
