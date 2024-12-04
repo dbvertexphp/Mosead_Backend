@@ -109,40 +109,42 @@ io.on("connection", (socket) => {
   });
 
   socket.on("messageRead", async (data) => {
-    console.log("data", data);
-    const uid = data.userId | "ishwar";
-    try {
-      const message = await Message.findById(data.messageId)
-        .populate("sender", "-password")
-        .populate("chat");
+      console.log("data", data);
+      const userIds = data.userIds || []; // Default to an empty array if not provided
 
-      if (!message) {
-        return console.log("Message not found");
+      try {
+        const message = await Message.findById(data.messageId)
+          .populate("sender", "-password")
+          .populate("chat");
+
+        if (!message) {
+          return console.log("Message not found");
+        }
+
+        const newReadBy = userIds.filter((uid) => !message.readBy.includes(uid));
+        if (newReadBy.length > 0) {
+          message.readBy.push(...newReadBy);
+          console.log("Updated readBy", message.readBy);
+          await message.save();
+        } else {
+          console.log("No updates needed, all users already included in readBy");
+        }
+
+        const decryptedContent = CryptoJS.AES.decrypt(
+          message.content,
+          process.env.SECRET_KEY
+        ).toString(CryptoJS.enc.Utf8);
+
+        const decryptedMessage = {
+          ...message.toObject(),
+          content: decryptedContent,
+        };
+        socket.to(data.chatId).emit("messageReadConfirmation", decryptedMessage);
+      } catch (error) {
+        console.log("Error in messageRead event: ", error.message);
       }
-      if (!message.readBy.includes(uid)) {
-        console.log("before update", "readBy", message.readBy, "userID", uid);
-        message.readBy.push(uid);
+    });
 
-        console.log("update success", "readBy", message.readBy, "userID", uid);
-        await message.save();
-      } else {
-        console.log("update failed");
-      }
-
-      const decryptedContent = CryptoJS.AES.decrypt(
-        message.content,
-        process.env.SECRET_KEY
-      ).toString(CryptoJS.enc.Utf8);
-
-      const decryptedMessage = {
-        ...message.toObject(),
-        content: decryptedContent,
-      };
-      socket.to(data.chatId).emit("messageReadConfirmation", decryptedMessage);
-    } catch (error) {
-      console.log("Error in messageRead event: ", error.message);
-    }
-  });
 
   socket.on("onMessageDeletedForEveryone", async ({ messageIds, chatId }) => {
     try {
