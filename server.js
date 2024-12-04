@@ -108,18 +108,25 @@ io.on("connection", (socket) => {
       .emit("messageRecieved", newMessageRecieved);
   });
 
-  socket.on("messageRead", async ({ messageId, userId, chatId }) => {
+  socket.on("messageRead", async (data) => {
+    console.log("data", data);
+    const uid = data.userId | "ishwar";
     try {
-      const message = await Message.findById(messageId)
+      const message = await Message.findById(data.messageId)
         .populate("sender", "-password")
         .populate("chat");
 
       if (!message) {
         return console.log("Message not found");
       }
-      if (!message.readBy.includes(userId)) {
-        message.readBy.push(userId);
+      if (!message.readBy.includes(uid)) {
+        console.log("before update", "readBy", message.readBy, "userID", uid);
+        message.readBy.push(uid);
+
+        console.log("update success", "readBy", message.readBy, "userID", uid);
         await message.save();
+      } else {
+        console.log("update failed");
       }
 
       const decryptedContent = CryptoJS.AES.decrypt(
@@ -131,9 +138,7 @@ io.on("connection", (socket) => {
         ...message.toObject(),
         content: decryptedContent,
       };
-      socket.to(chatId).emit("messageReadConfirmation", decryptedMessage);
-      console.log(decryptedMessage);
-
+      socket.to(data.chatId).emit("messageReadConfirmation", decryptedMessage);
     } catch (error) {
       console.log("Error in messageRead event: ", error.message);
     }
