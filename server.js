@@ -11,6 +11,7 @@ const cookieParser = require("cookie-parser");
 const Message = require("./models/messageModel.js");
 const User = require("./models/userModel.js");
 const moment = require("moment-timezone");
+const CryptoJS = require("crypto-js");
 
 dotenv.config();
 connectDB();
@@ -107,7 +108,7 @@ io.on("connection", (socket) => {
       .emit("messageRecieved", newMessageRecieved);
   });
 
-  socket.on("messageRead", async ({ messageId, userId }) => {
+  socket.on("messageRead", async ({ messageId, userId, chatId }) => {
     try {
       const message = await Message.findById(messageId)
         .populate("sender", "-password")
@@ -120,8 +121,17 @@ io.on("connection", (socket) => {
         message.readBy.push(userId);
         await message.save();
       }
-      socket.in(userId).emit("messageReadConfirmation", message);
-      console.log(messageId);
+
+      const decryptedContent = CryptoJS.AES.decrypt(
+        message.content,
+        process.env.SECRET_KEY
+      ).toString(CryptoJS.enc.Utf8);
+
+      const decryptedMessage = {
+        ...message.toObject(),
+        content: decryptedContent,
+      };
+      socket.to(chatId).emit("messageReadConfirmation", decryptedMessage);
       console.log(message);
     } catch (error) {
       console.log("Error in messageRead event: ", error.message);
