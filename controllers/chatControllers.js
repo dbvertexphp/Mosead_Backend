@@ -103,35 +103,6 @@ const chatDelete = asyncHandler(async (req, res) => {
   }
 });
 
-//@description Fetch all chats for a user
-//@route           GET /api/chat/
-//@access          Protected
-// const fetchChats = asyncHandler(async (req, res) => {
-//   console.log(req.user._id);
-
-//   try {
-//     const chats = await Chat.find({ users: { $elemMatch: { $eq: req.user._id } } })
-//       .populate("users", "-password")
-//       .populate("groupAdmin", "-password")
-//       .populate("latestMessage")
-//       .sort({ updatedAt: -1 });
-
-//     if (!chats || chats.length === 0) {
-//       return res.status(404).json({ message: "No chats found.", status: false });
-//     }
-
-//     const populatedChats = await User.populate(chats, {
-//       path: "latestMessage.sender",
-//       select: "name profile_pic phone",
-//     });
-
-//     res.status(200).json(populatedChats);
-//   } catch (error) {
-//     console.error("Error fetching chats:", error);
-//     res.status(500).json({ message: "Error fetching chats. Please try again later.", error: error.message });
-//   }
-// });
-
 const fetchChats = asyncHandler(async (req, res) => {
   try {
     // Fetch the main user data
@@ -196,6 +167,73 @@ const fetchChats = asyncHandler(async (req, res) => {
     });
   }
 });
+
+// const fetchChats = asyncHandler(async (req, res) => {
+//       try {
+//         // Fetch the main user data
+//         const user = await User.findById(req.user._id);
+
+//         // Fetch chats where the user is a participant and the chat is not a group chat
+//         let chats = await Chat.find({
+//           users: { $elemMatch: { $eq: req.user._id } },
+//           isGroupChat: false,
+//         })
+//           .populate("users", "-password") // Populate users, excluding password
+//           .populate("groupAdmin", "-password") // Populate groupAdmin, excluding password
+//           .populate("latestMessage") // Populate the latestMessage field
+//           .sort({ updatedAt: -1 }); // Sort by the latest update
+
+//         // Filter chats to include only those that have a latestMessage
+//         chats = chats.filter((chat) => chat.latestMessage);
+
+//         if (!chats || chats.length === 0) {
+//           return res
+//             .status(404)
+//             .json({ message: "No chats found.", status: false });
+//         }
+
+//         // Populate the sender details of the latestMessage
+//         const populatedChats = await User.populate(chats, {
+//           path: "latestMessage.sender",
+//           select: "_id name image", // Select specific fields from the sender
+//         });
+
+//         // Modify chats to decrypt the latestMessage content and format as needed
+//         const modifiedChats = populatedChats.map((chat) => {
+//           const chatObj = chat.toObject();
+
+//           if (chatObj.latestMessage && chatObj.latestMessage.content) {
+//             try {
+//               // Decrypt the latestMessage content
+//               const bytes = CryptoJS.AES.decrypt(
+//                 chatObj.latestMessage.content,
+//                 process.env.SECRET_KEY
+//               );
+//               const decryptedContent = bytes.toString(CryptoJS.enc.Utf8);
+//               chatObj.latestMessage.content = decryptedContent; // Replace encrypted content with decrypted content
+//             } catch (error) {
+//               console.error("Error decrypting latestMessage:", error);
+//             }
+//           }
+
+//           // Ensure sender details are in the correct format
+//           if (chatObj.latestMessage && chatObj.latestMessage.sender) {
+//             chatObj.latestMessage.sender = chatObj.latestMessage.sender._id;
+//           }
+
+//           return chatObj;
+//         });
+
+//         // Send response with chats and additional sender details
+//         res.status(200).json({ chats: modifiedChats, status: true });
+//       } catch (error) {
+//         console.error("Error fetching chats:", error);
+//         res.status(500).json({
+//           message: "Error fetching chats. Please try again later.",
+//           error: error.message,
+//         });
+//       }
+//     });
 
 const getMyGroups = asyncHandler(async (req, res) => {
   try {

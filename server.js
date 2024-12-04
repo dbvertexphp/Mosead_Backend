@@ -132,7 +132,8 @@ io.on("connection", (socket) => {
         content: decryptedContent,
       };
       socket.to(chatId).emit("messageReadConfirmation", decryptedMessage);
-      console.log(message);
+      console.log(decryptedMessage);
+
     } catch (error) {
       console.log("Error in messageRead event: ", error.message);
     }
