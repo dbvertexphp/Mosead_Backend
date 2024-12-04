@@ -39,13 +39,12 @@ const allMessages = asyncHandler(async (req, res) => {
       });
     }
 
-    // Update the `readBy` field for messages if `userId` is not already included
-    for (const message of messages) {
-      if (!message.readBy.includes(userId)) {
-        message.readBy.push(userId);
-        await message.save(); // Save the updated message
-      }
-    }
+    // Update `readBy` field directly in the database
+    const messageIds = messages.map((message) => message._id);
+    await Message.updateMany(
+      { _id: { $in: messageIds }, readBy: { $nin: [userId] } },
+      { $addToSet: { readBy: userId } }
+    );
 
     // Decrypt and filter messages
     const filteredMessages = messages
