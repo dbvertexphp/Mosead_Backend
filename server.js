@@ -102,7 +102,9 @@ io.on("connection", (socket) => {
   });
 
   socket.on("newMessage", (newMessageRecieved) => {
-    socket.to(newMessageRecieved.chatId).emit("messageRecieved", newMessageRecieved);
+    socket
+      .to(newMessageRecieved.chatId)
+      .emit("messageRecieved", newMessageRecieved);
   });
 
   socket.on("messageRead", async ({ messageId, userId }) => {
@@ -126,6 +128,25 @@ io.on("connection", (socket) => {
       });
     } catch (error) {
       console.log("Error in messageRead event: ", error.message);
+    }
+  });
+
+  socket.on("onMessageDeletedForEveryone", async ({ messageIds, chatId }) => {
+    try {
+      if (!Array.isArray(messageIds) || messageIds.length === 0) {
+        return console.log("No messages provided for deletion.");
+      }
+      io.to(chatId).emit("messagesDeletedForEveryone", { messageIds, chatId });
+      console.log(
+        `Messages ${messageIds.join(
+          ", "
+        )} deleted for everyone in chat ${chatId}`
+      );
+    } catch (error) {
+      console.log(
+        "Error in onMessageDeletedForEveryone event: ",
+        error.message
+      );
     }
   });
 

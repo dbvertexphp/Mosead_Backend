@@ -31,12 +31,6 @@ const allMessages = asyncHandler(async (req, res) => {
       .limit(page * limit) // Limit to the specified number of messages
       .populate("chat");
 
-    // const messages = await Message.find(query)
-    // .sort({ createdAt: -1 }) // Sort messages by creation date, newest first
-    // .skip((page - 1) * limit) // Skip messages for previous pages
-    // .limit(limit) // Limit to the specified number of messages
-    // .populate("chat");
-
     // If no messages are found, return a message indicating so
     if (messages.length === 0) {
       return res.status(404).json({
@@ -306,41 +300,55 @@ const deleteMessageForMe = asyncHandler(async (req, res) => {
 });
 
 const deleteMessageForEveryone = asyncHandler(async (req, res) => {
-  const { messageId } = req.body;
-  if (!messageId) {
-    return res
-      .status(400)
-      .json({ message: "Message ID is required", status: false });
-  }
+      const { messageIds } = req.body;
 
-  try {
-    const message = await Message.findById(messageId);
+      // Validate messageIds
+      if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
+        return res.status(400).json({
+          message: "Message IDs are required and should be an array",
+          status: false,
+        });
+      }
 
-    if (!message) {
-      return res
-        .status(404)
-        .json({ message: "Message not found", status: false });
-    }
+      try {
+        const failedDeletes = [];
+        const successfulDeletes = [];
 
-    // Ensure only the sender can delete the message for everyone
-    if (message.sender.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        message: "You are not authorized to delete this message",
-        status: false,
-      });
-    }
+        // Loop through each messageId
+        for (const messageId of messageIds) {
+          const message = await Message.findById(messageId);
 
-    // Delete the message from the database
-    await Message.deleteOne({ _id: messageId });
+          // If the message does not exist, add it to failedDeletes and continue
+          if (!message) {
+            failedDeletes.push({ messageId, reason: "Message not found" });
+            continue;
+          }
 
-    res.json({
-      message: "Message deleted for everyone successfully",
-      status: true,
+          // Ensure only the sender can delete the message for everyone
+          if (message.sender.toString() !== req.user._id.toString()) {
+            failedDeletes.push({
+              messageId,
+              reason: "Not authorized to delete this message"
+            });
+            continue;
+          }
+
+          // Delete the message from the database
+          await Message.deleteOne({ _id: messageId });
+          successfulDeletes.push(messageId);
+        }
+
+        res.json({
+          message: "Messages processed for deletion",
+          successfulDeletes,
+          failedDeletes,
+          status: true,
+        });
+      } catch (error) {
+        res.status(500).json({ message: error.message, status: false });
+      }
     });
-  } catch (error) {
-    res.status(500).json({ message: error.message, status: false });
-  }
-});
+
 
 const clearAllMessages = asyncHandler(async (req, res) => {
   const { chatId } = req.body;
