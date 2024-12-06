@@ -7,6 +7,79 @@ const { upload, checkTotalSize } = require("../middleware/uploadMiddleware.js");
 const CryptoJS = require("crypto-js");
 const moment = require("moment-timezone");
 
+// const allMessages = asyncHandler(async (req, res) => {
+//   const userId = req.user._id;
+//   const { chatId, page = 1, limit = 10, search = "" } = req.body;
+
+//   try {
+//     if (!chatId) {
+//       return res
+//         .status(400)
+//         .json({ message: "chatId is requires", status: false });
+//     }
+//     // Fetch messages matching the chat ID and not deleted for the user
+//     const query = {
+//       chat: chatId,
+//       deletedFor: { $nin: [userId] },
+//     };
+
+//     const totalMessage = await Message.countDocuments(query);
+//     const skipMessages = page * limit;
+//     const messages = await Message.find(query)
+//       .sort({ createdAt: 1 }) // Sort messages by creation date, newest first
+//       .skip(Math.max(0, totalMessage - skipMessages)) // Skip messages for previous pages
+//       .limit(page * limit) // Limit to the specified number of messages
+//       .populate("chat");
+
+//     // If no messages are found, return a message indicating so
+//     if (messages.length === 0) {
+//       return res.status(404).json({
+//         message: "No messages found for this chat.",
+//         status: false,
+//       });
+//     }
+
+//     // Update `readBy` field directly in the database
+//     const messageIds = messages.map((message) => message._id);
+//     await Message.updateMany(
+//       { _id: { $in: messageIds }, readBy: { $nin: [userId] } },
+//       { $addToSet: { readBy: userId } }
+//     );
+
+//     // Decrypt and filter messages
+//     const filteredMessages = messages
+//       .map((message) => {
+//         const bytes = CryptoJS.AES.decrypt(
+//           message.content,
+//           process.env.SECRET_KEY
+//         );
+//         const originalContent = bytes.toString(CryptoJS.enc.Utf8);
+//         return {
+//           ...message.toObject(),
+//           content: originalContent,
+//         };
+//       })
+//       .filter((message) =>
+//         message.content.toLowerCase().includes(search.toLowerCase())
+//       );
+
+//     // Get the total count of messages for the given chat
+//     const totalMessages = await Message.countDocuments(query);
+//     const totalPages = Math.ceil(totalMessages / limit);
+
+//     res.json({
+//       messages: filteredMessages,
+//       page,
+//       limit,
+//       totalMessages,
+//       totalPages,
+//       status: true,
+//     });
+//   } catch (error) {
+//     res.status(400).json({ message: error.message, status: false });
+//   }
+// });
+
 const allMessages = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   const { chatId, page = 1, limit = 10, search = "" } = req.body;
@@ -15,21 +88,31 @@ const allMessages = asyncHandler(async (req, res) => {
     if (!chatId) {
       return res
         .status(400)
-        .json({ message: "chatId is requires", status: false });
+        .json({ message: "chatId is required", status: false });
     }
-    // Fetch messages matching the chat ID and not deleted for the user
+
+    // Query to fetch messages for the chat and not deleted for the user
     const query = {
       chat: chatId,
       deletedFor: { $nin: [userId] },
     };
 
-    const totalMessage = await Message.countDocuments(query);
-    const skipMessages = page * limit;
+    // Get total message count for the chat
+    const totalMessages = await Message.countDocuments(query);
+
+    // Calculate how many messages to skip
+    //   const skipMessages = (page - 1) * limit;
+
+    let count = page * 10;
+
+    // Fetch messages with correct pagination
     const messages = await Message.find(query)
-      .sort({ createdAt: 1 }) // Sort messages by creation date, newest first
-      .skip(Math.max(0, totalMessage - skipMessages)) // Skip messages for previous pages
-      .limit(page * limit) // Limit to the specified number of messages
+      .sort({ createdAt: "desc" })
+      .skip(count - 10)
+      .limit(limit)
       .populate("chat");
+
+      // messages.reverse();
 
     // If no messages are found, return a message indicating so
     if (messages.length === 0) {
@@ -63,12 +146,11 @@ const allMessages = asyncHandler(async (req, res) => {
         message.content.toLowerCase().includes(search.toLowerCase())
       );
 
-    // Get the total count of messages for the given chat
-    const totalMessages = await Message.countDocuments(query);
+    // Calculate total pages
     const totalPages = Math.ceil(totalMessages / limit);
 
     res.json({
-      messages: filteredMessages,
+      messages: filteredMessages.reverse(), // Reverse to show oldest first in each page
       page,
       limit,
       totalMessages,
@@ -169,22 +251,6 @@ const sendMessage = asyncHandler(async (req, res) => {
     });
   });
 });
-
-const decryptedContent = (encryptedContent) => {
-  if (!encryptedContent || encryptedContent === "") {
-    return ""; // Return empty string if no content is encrypted or if it's empty
-  }
-
-  const bytes = CryptoJS.AES.decrypt(encryptedContent, process.env.SECRET_KEY);
-  const originalContent = bytes.toString(CryptoJS.enc.Utf8);
-
-  // Check if decryption result is empty, in case of invalid decryption
-  if (!originalContent) {
-    return ""; // You can also return an error or a custom message if needed
-  }
-
-  return originalContent;
-};
 
 const saveCallHistory = asyncHandler(async (req, res) => {
   try {
@@ -384,16 +450,21 @@ const clearAllMessages = asyncHandler(async (req, res) => {
 });
 
 const forwardMessage = asyncHandler(async (req, res) => {
-  const { messageIds, userIds } = req.body;
+  const { messageIds, userIds, chatIds } = req.body;
+
   // Validate input
   if (
     !messageIds ||
     !userIds ||
+    !chatIds ||
     !Array.isArray(messageIds) ||
-    !Array.isArray(userIds)
+    !Array.isArray(userIds) ||
+    !Array.isArray(chatIds) ||
+    userIds.length !== chatIds.length
   ) {
     return res.status(400).json({
-      message: "Invalid input. messageIds and userIds must be arrays.",
+      message:
+        "Invalid input. messageIds, userIds, and chatIds must be arrays of equal length.",
       status: false,
     });
   }
@@ -412,28 +483,31 @@ const forwardMessage = asyncHandler(async (req, res) => {
     }
 
     const newMessages = [];
-
     const currentDate = moment();
-    let istDate = currentDate
+    const istDate = currentDate
       .tz("Asia/Kolkata")
       .format("YYYY-MM-DDTHH:mm:ss.SSSZ");
 
-    // Process each message and forward to each user
+    // Process each message and forward to each user with corresponding chat ID
     for (const message of messages) {
       const decryptedContent = CryptoJS.AES.decrypt(
         message.content,
         process.env.SECRET_KEY
       ).toString(CryptoJS.enc.Utf8);
 
-      for (const userId of userIds) {
+      for (let i = 0; i < userIds.length; i++) {
+        const userId = userIds[i];
+        const chatId = chatIds[i];
+
         const newMessage = {
           sender: req.user._id,
           content: CryptoJS.AES.encrypt(
             decryptedContent,
             process.env.SECRET_KEY
           ).toString(), // Re-encrypt for forwarding
-          chat: message.chat._id,
+          chat: chatId, // Update with the corresponding chat ID
           media: message.media, // Forward media if any
+          readBy: [req.user._id],
           createdAt: istDate,
           updatedAt: istDate,
         };
@@ -443,17 +517,17 @@ const forwardMessage = asyncHandler(async (req, res) => {
         // Populate the new message fields
         const populatedMessage = await createdMessage
           .populate("sender", "name profile_pic")
-          .execPopulate();
-        await populatedMessage.populate("chat").execPopulate();
+          .populate("chat");
 
-        // Add to the response array
+        // Add to the response array with decrypted content
         newMessages.push({
           ...populatedMessage.toObject(),
-          sender: populatedMessage.sender._id, // Only include sender ID
+          content: decryptedContent(populatedMessage.content),
+          sender: populatedMessage.sender._id,
         });
 
         // Update the chat with the latest message
-        await Chat.findByIdAndUpdate(message.chat._id, {
+        await Chat.findByIdAndUpdate(chatId, {
           latestMessage: createdMessage,
         });
       }
@@ -471,6 +545,22 @@ const forwardMessage = asyncHandler(async (req, res) => {
     });
   }
 });
+
+const decryptedContent = (encryptedContent) => {
+  if (!encryptedContent || encryptedContent === "") {
+    return ""; // Return empty string if no content is encrypted or if it's empty
+  }
+
+  const bytes = CryptoJS.AES.decrypt(encryptedContent, process.env.SECRET_KEY);
+  const originalContent = bytes.toString(CryptoJS.enc.Utf8);
+
+  // Check if decryption result is empty, in case of invalid decryption
+  if (!originalContent) {
+    return ""; // You can also return an error or a custom message if needed
+  }
+
+  return originalContent;
+};
 
 module.exports = {
   allMessages,

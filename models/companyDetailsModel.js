@@ -55,7 +55,6 @@ const reportSchema = new mongoose.Schema(
     },
     extra: {
       type: String,
-      required: true,
     },
   },
   { timestamps: true }

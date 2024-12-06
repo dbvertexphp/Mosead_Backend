@@ -12,6 +12,7 @@ const Message = require("./models/messageModel.js");
 const User = require("./models/userModel.js");
 const moment = require("moment-timezone");
 const CryptoJS = require("crypto-js");
+const Chat = require("./models/chatModel.js");
 
 dotenv.config();
 connectDB();
@@ -80,12 +81,31 @@ io.on("connection", (socket) => {
     socket.join(userData.userId);
     onlineUsers.set(userData.userId, socket.id);
     console.log(`${userData.userId} is online`);
-    // Update the user's online status in the database
     await User.findByIdAndUpdate(
       userData.userId,
       { status: "Online" },
       { new: true }
     );
+
+    // Find all chat IDs where the user is a participant
+    const userChats = await Chat.find({ users: userData.userId }).select("_id");
+    const chatIds = userChats.map((chat) => chat._id);
+    console.log("User's chat IDs:", chatIds);
+
+    const unseenMessages = await Message.find({
+      chat: { $in: chatIds }, // Use found chat IDs
+      readBy: { $ne: userData.userId },
+    });
+
+    const messageArray = [];
+
+    unseenMessages.forEach((message) => {
+      message.readBy.push(userData.userId);
+      message.save();
+      messageArray.push(message);
+    });
+    socket.emit("messageReadConfirmation", messageArray);
+
     io.emit("userOnline", userData);
     socket.emit("connected", userData);
   });
@@ -95,11 +115,11 @@ io.on("connection", (socket) => {
     console.log("User Joined Room: " + room.chatId);
     socket.emit("joined", room);
   });
-  socket.on("typing", (room) => {
-    socket.to(room).emit("typing", room);
+  socket.on("typing", (data) => {
+    socket.to(data.chatId).emit("typing", data);
   });
-  socket.on("stopTyping", (room) => {
-    socket.to(room).emit("stopTyping", room);
+  socket.on("stopTyping", (data) => {
+    socket.to(data.chatId).emit("stopTyping", data);
   });
 
   socket.on("newMessage", (newMessageRecieved) => {
@@ -109,42 +129,43 @@ io.on("connection", (socket) => {
   });
 
   socket.on("messageRead", async (data) => {
-      console.log("data", data);
-      const userIds = data.userIds || []; // Default to an empty array if not provided
+    console.log("data", data);
+    const userIds = data.userIds || []; // Default to an empty array if not provided
 
-      try {
-        const message = await Message.findById(data.messageId)
-          .populate("sender", "-password")
-          .populate("chat");
+    try {
+      const message = await Message.findById(data.messageId)
+        .populate("sender", "-password")
+        .populate("chat");
 
-        if (!message) {
-          return console.log("Message not found");
-        }
-
-        const newReadBy = userIds.filter((uid) => !message.readBy.includes(uid));
-        if (newReadBy.length > 0) {
-          message.readBy.push(...newReadBy);
-          console.log("Updated readBy", message.readBy);
-          await message.save();
-        } else {
-          console.log("No updates needed, all users already included in readBy");
-        }
-
-        const decryptedContent = CryptoJS.AES.decrypt(
-          message.content,
-          process.env.SECRET_KEY
-        ).toString(CryptoJS.enc.Utf8);
-
-        const decryptedMessage = {
-          ...message.toObject(),
-          content: decryptedContent,
-        };
-        socket.to(data.chatId).emit("messageReadConfirmation", decryptedMessage);
-      } catch (error) {
-        console.log("Error in messageRead event: ", error.message);
+      if (!message) {
+        return console.log("Message not found");
       }
-    });
 
+      const newReadBy = userIds.filter((uid) => !message.readBy.includes(uid));
+      if (newReadBy.length > 0) {
+        message.readBy.push(...newReadBy);
+        console.log("Updated readBy", message.readBy);
+        await message.save();
+      } else {
+        console.log("No updates needed, all users already included in readBy");
+      }
+
+      const decryptedContent = CryptoJS.AES.decrypt(
+        message.content,
+        process.env.SECRET_KEY
+      ).toString(CryptoJS.enc.Utf8);
+
+      const decryptedMessage = {
+        ...message.toObject(),
+        content: decryptedContent,
+      };
+      socket
+        .to(data.chatId)
+        .emit("messageReadConfirmation", [decryptedMessage]);
+    } catch (error) {
+      console.log("Error in messageRead event: ", error.message);
+    }
+  });
 
   socket.on("onMessageDeletedForEveryone", async ({ messageIds, chatId }) => {
     try {

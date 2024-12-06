@@ -167,7 +167,7 @@ const submitReport = asyncHandler(async (req, res) => {
   const { reason, extra } = req.body;
 
   // Validate request data
-  if (!reason || !extra) {
+  if (!reason) {
     return res
       .status(400)
       .json({ message: "Please provide all required fields." });

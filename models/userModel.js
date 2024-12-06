@@ -40,7 +40,7 @@ const userSchema = mongoose.Schema({
     ],
   },
   status: {
-    type: String,
+    type: mongoose.Schema.Types.Mixed,
     default: "Online",
   },
   datetime: {
