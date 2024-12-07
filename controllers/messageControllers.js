@@ -521,10 +521,10 @@ const forwardMessage = asyncHandler(async (req, res) => {
 
         // Add to the response array with decrypted content
         newMessages.push({
-          ...populatedMessage.toObject(),
-          content: decryptedContent(populatedMessage.content),
-          sender: populatedMessage.sender._id,
-        });
+            ...populatedMessage.toObject(),
+            content: decryptedContent, // Decrypted content is added directly here
+            sender: populatedMessage.sender._id,
+          });
 
         // Update the chat with the latest message
         await Chat.findByIdAndUpdate(chatId, {
