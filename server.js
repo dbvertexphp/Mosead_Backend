@@ -104,7 +104,7 @@ io.on("connection", (socket) => {
       message.save();
       messageArray.push(message);
     });
-    socket.emit("messageReadConfirmation", messageArray);
+    socket.emit("messageSeen", messageArray);
 
     io.emit("userOnline", userData);
     socket.emit("connected", userData);
@@ -131,6 +131,7 @@ io.on("connection", (socket) => {
   socket.on("messageRead", async (data) => {
     console.log("data", data);
     const userIds = data.userIds || []; // Default to an empty array if not provided
+    console.log("userIds: ", userIds);
 
     try {
       const message = await Message.findById(data.messageId)
@@ -141,11 +142,17 @@ io.on("connection", (socket) => {
         return console.log("Message not found");
       }
 
+      console.log("Current readBy: ", message.readBy);
+
+      // Filter out userIds that are not already in message.readBy
       const newReadBy = userIds.filter((uid) => !message.readBy.includes(uid));
+      console.log("newReadBy: ", newReadBy);
+
       if (newReadBy.length > 0) {
         message.readBy.push(...newReadBy);
         console.log("Updated readBy", message.readBy);
         await message.save();
+        console.log("Message saved successfully");
       } else {
         console.log("No updates needed, all users already included in readBy");
       }
@@ -159,9 +166,7 @@ io.on("connection", (socket) => {
         ...message.toObject(),
         content: decryptedContent,
       };
-      socket
-        .to(data.chatId)
-        .emit("messageReadConfirmation", [decryptedMessage]);
+      socket.to(data.chatId).emit("messageReadConfirmation", decryptedMessage);
     } catch (error) {
       console.log("Error in messageRead event: ", error.message);
     }
