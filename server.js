@@ -86,7 +86,6 @@ io.on("connection", (socket) => {
       { status: "Online" },
       { new: true }
     );
-
     // Find all chat IDs where the user is a participant
     const userChats = await Chat.find({ users: userData.userId }).select("_id");
     const chatIds = userChats.map((chat) => chat._id);
@@ -104,7 +103,7 @@ io.on("connection", (socket) => {
       message.save();
       messageArray.push(message);
     });
-    socket.emit("messageSeen", messageArray);
+    socket.emit("messageReadConfirmation", messageArray);
 
     io.emit("userOnline", userData);
     socket.emit("connected", userData);
@@ -129,49 +128,50 @@ io.on("connection", (socket) => {
   });
 
   socket.on("messageRead", async (data) => {
-      console.log("data", data);
-      const userIds = data.readBy || data['readBy '] || []; // Handle key with or without trailing space
-      console.log("userIds: ", userIds);
+    console.log("data", data);
+    const userIds = data.readBy || data["readBy "] || [];
+    console.log("userIds: ", userIds);
 
-      try {
-        const message = await Message.findById(data.messageId)
-          .populate("sender", "-password")
-          .populate("chat");
+    try {
+      const message = await Message.findById(data.messageId)
+        .populate("sender", "-password")
+        .populate("chat");
 
-        if (!message) {
-          return console.log("Message not found");
-        }
-
-        console.log("Current readBy: ", message.readBy);
-
-        // Filter out userIds that are not already in message.readBy
-        const newReadBy = userIds.filter((uid) => !message.readBy.includes(uid));
-        console.log("newReadBy: ", newReadBy);
-
-        if (newReadBy.length > 0) {
-          message.readBy.push(...newReadBy);
-          console.log("Updated readBy", message.readBy);
-          await message.save();
-          console.log("Message saved successfully");
-        } else {
-          console.log("No updates needed, all users already included in readBy");
-        }
-
-        const decryptedContent = CryptoJS.AES.decrypt(
-          message.content,
-          process.env.SECRET_KEY
-        ).toString(CryptoJS.enc.Utf8);
-
-        const decryptedMessage = {
-          ...message.toObject(),
-          content: decryptedContent,
-        };
-        socket.to(data.chatId).emit("messageReadConfirmation", decryptedMessage);
-      } catch (error) {
-        console.log("Error in messageRead event: ", error.message);
+      if (!message) {
+        return console.log("Message not found");
       }
-    });
 
+      console.log("Current readBy: ", message.readBy);
+
+      // Filter out userIds that are not already in message.readBy
+      const newReadBy = userIds.filter((uid) => !message.readBy.includes(uid));
+      console.log("newReadBy: ", newReadBy);
+
+      if (newReadBy.length > 0) {
+        message.readBy.push(...newReadBy);
+        console.log("Updated readBy", message.readBy);
+        await message.save();
+        console.log("Message saved successfully");
+      } else {
+        console.log("No updates needed, all users already included in readBy");
+      }
+
+      const decryptedContent = CryptoJS.AES.decrypt(
+        message.content,
+        process.env.SECRET_KEY
+      ).toString(CryptoJS.enc.Utf8);
+
+      const decryptedMessage = {
+        ...message.toObject(),
+        content: decryptedContent,
+      };
+      socket
+        .to(data.chatId)
+        .emit("messageReadConfirmation", [decryptedMessage]);
+    } catch (error) {
+      console.log("Error in messageRead event: ", error.message);
+    }
+  });
 
   socket.on("onMessageDeletedForEveryone", async ({ messageIds, chatId }) => {
     try {

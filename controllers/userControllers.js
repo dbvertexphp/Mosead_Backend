@@ -20,7 +20,7 @@ const allUsers = asyncHandler(async (req, res) => {
 });
 
 const registerUser = asyncHandler(async (req, res) => {
-  const { phone, country_code } = req.body;
+  const { phone, country_code, firebase_token } = req.body;
 
   if (!phone || !country_code) {
     res.status(400);
@@ -29,18 +29,18 @@ const registerUser = asyncHandler(async (req, res) => {
 
   let user = await User.findOne({ phone });
 
-  const otp = generateOTP(); // Generate a new OTP regardless of user existence
+  const otp = generateOTP();
 
   if (user) {
-    // If the user exists, update the OTP
-    user.otp = otp; // Update the OTP
-    await user.save(); // Save the updated user document
+    user.otp = otp;
+    user.firebase_token = firebase_token;
+    await user.save();
   } else {
-    // If the user doesn't exist, create a new one with a new OTP
     user = await User.create({
       phone,
       otp,
       country_code,
+      firebase_token,
     });
   }
 
@@ -186,7 +186,6 @@ const updateProfile = asyncHandler(async (req, res) => {
       throw new Error("User not found");
     }
 
-
     const password = "mosead_" + String(phone) + "28";
 
     const phoneString = "mosead_" + String(phone);
@@ -269,7 +268,7 @@ const getUserDataByCbId = asyncHandler(async (req, res) => {
   }
 
   // Find the user by ID
-  const user = await User.find({cb_id: cbId}).select("-password"); // Select all fields except password
+  const user = await User.find({ cb_id: cbId }).select("-password"); // Select all fields except password
 
   if (!user) {
     res.status(404);
@@ -288,20 +287,22 @@ const logoutUser = asyncHandler(async (req, res) => {
   const authHeader = req.headers.authorization;
 
   if (authHeader) {
-    const token = authHeader.split(" ")[1]; // Extract token from "Bearer {token}"
+    const token = authHeader.split(" ")[1];
 
     const userId = req.headers.userID;
-    console.log(userId);
 
-    await User.updateOne({ _id: userId }, { $set: { otp_verified: 0 } });
+    await User.updateOne(
+      { _id: userId },
+      { $set: { otp_verified: 0, firebase_token: "" } }
+    );
 
     // Expire the cookie immediately
     res.setHeader(
       "Set-Cookie",
       cookie.serialize("Websitetoken", "", {
-        httpOnly: true, // Set to true for security
-        expires: new Date(0), // Set the expiration date to the past
-        path: "/", // Specify the path for the cookie
+        httpOnly: true,
+        expires: new Date(0),
+        path: "/",
       })
     );
 
@@ -426,5 +427,5 @@ module.exports = {
   logoutUser,
   getUserDetailsByPhones,
   getUserProfileData,
-  getUserDataByCbId
+  getUserDataByCbId,
 };

@@ -4,7 +4,6 @@ const moment = require("moment-timezone");
 
 const { Schema } = mongoose;
 
-
 const userSchema = mongoose.Schema({
   name: { type: "String", default: null },
   about: { type: "String", default: null },
@@ -38,6 +37,9 @@ const userSchema = mongoose.Schema({
         ref: "User",
       },
     ],
+  },
+  firebase_token: {
+    type: String,
   },
   status: {
     type: mongoose.Schema.Types.Mixed,
