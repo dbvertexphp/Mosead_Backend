@@ -6,83 +6,11 @@ const CallHistory = require("../models/callHistoryModel.js");
 const { upload, checkTotalSize } = require("../middleware/uploadMiddleware.js");
 const CryptoJS = require("crypto-js");
 const moment = require("moment-timezone");
-
-// const allMessages = asyncHandler(async (req, res) => {
-//   const userId = req.user._id;
-//   const { chatId, page = 1, limit = 10, search = "" } = req.body;
-
-//   try {
-//     if (!chatId) {
-//       return res
-//         .status(400)
-//         .json({ message: "chatId is requires", status: false });
-//     }
-//     // Fetch messages matching the chat ID and not deleted for the user
-//     const query = {
-//       chat: chatId,
-//       deletedFor: { $nin: [userId] },
-//     };
-
-//     const totalMessage = await Message.countDocuments(query);
-//     const skipMessages = page * limit;
-//     const messages = await Message.find(query)
-//       .sort({ createdAt: 1 }) // Sort messages by creation date, newest first
-//       .skip(Math.max(0, totalMessage - skipMessages)) // Skip messages for previous pages
-//       .limit(page * limit) // Limit to the specified number of messages
-//       .populate("chat");
-
-//     // If no messages are found, return a message indicating so
-//     if (messages.length === 0) {
-//       return res.status(404).json({
-//         message: "No messages found for this chat.",
-//         status: false,
-//       });
-//     }
-
-//     // Update `readBy` field directly in the database
-//     const messageIds = messages.map((message) => message._id);
-//     await Message.updateMany(
-//       { _id: { $in: messageIds }, readBy: { $nin: [userId] } },
-//       { $addToSet: { readBy: userId } }
-//     );
-
-//     // Decrypt and filter messages
-//     const filteredMessages = messages
-//       .map((message) => {
-//         const bytes = CryptoJS.AES.decrypt(
-//           message.content,
-//           process.env.SECRET_KEY
-//         );
-//         const originalContent = bytes.toString(CryptoJS.enc.Utf8);
-//         return {
-//           ...message.toObject(),
-//           content: originalContent,
-//         };
-//       })
-//       .filter((message) =>
-//         message.content.toLowerCase().includes(search.toLowerCase())
-//       );
-
-//     // Get the total count of messages for the given chat
-//     const totalMessages = await Message.countDocuments(query);
-//     const totalPages = Math.ceil(totalMessages / limit);
-
-//     res.json({
-//       messages: filteredMessages,
-//       page,
-//       limit,
-//       totalMessages,
-//       totalPages,
-//       status: true,
-//     });
-//   } catch (error) {
-//     res.status(400).json({ message: error.message, status: false });
-//   }
-// });
+const { sendMessageNotification } = require("../utils/sendNotification");
 
 const allMessages = asyncHandler(async (req, res) => {
   const userId = req.user._id;
-  const { chatId, page = 1, limit = 10, search = "" } = req.body;
+  const { chatId, page = 1, limit = 25, search = "" } = req.body;
 
   try {
     if (!chatId) {
@@ -103,16 +31,16 @@ const allMessages = asyncHandler(async (req, res) => {
     // Calculate how many messages to skip
     //   const skipMessages = (page - 1) * limit;
 
-    let count = page * 10;
+    let count = page * 25;
 
     // Fetch messages with correct pagination
     const messages = await Message.find(query)
       .sort({ createdAt: "desc" })
-      .skip(count - 10)
+      .skip(count - 25)
       .limit(limit)
       .populate("chat");
 
-      // messages.reverse();
+    // messages.reverse();
 
     // If no messages are found, return a message indicating so
     if (messages.length === 0) {
@@ -242,7 +170,7 @@ const sendMessage = asyncHandler(async (req, res) => {
         res.json({
           message: "Message sent successfully",
           status: true,
-          data: response, // Including the message object
+          data: response,
         });
       } catch (error) {
         res.status(400);
@@ -521,10 +449,10 @@ const forwardMessage = asyncHandler(async (req, res) => {
 
         // Add to the response array with decrypted content
         newMessages.push({
-            ...populatedMessage.toObject(),
-            content: decryptedContent, // Decrypted content is added directly here
-            sender: populatedMessage.sender._id,
-          });
+          ...populatedMessage.toObject(),
+          content: decryptedContent, // Decrypted content is added directly here
+          sender: populatedMessage.sender._id,
+        });
 
         // Update the chat with the latest message
         await Chat.findByIdAndUpdate(chatId, {

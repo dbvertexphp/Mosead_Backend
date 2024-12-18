@@ -13,6 +13,7 @@ const User = require("./models/userModel.js");
 const moment = require("moment-timezone");
 const CryptoJS = require("crypto-js");
 const Chat = require("./models/chatModel.js");
+const { sendMessageNotification } = require("./utils/sendNotification");
 
 dotenv.config();
 connectDB();
@@ -74,6 +75,7 @@ const io = require("socket.io")(server, {
 });
 
 const onlineUsers = new Map();
+let userRooms = {};
 
 io.on("connection", (socket) => {
   console.log("Connected to socket.io");
@@ -87,44 +89,125 @@ io.on("connection", (socket) => {
       { new: true }
     );
     // Find all chat IDs where the user is a participant
-    const userChats = await Chat.find({ users: userData.userId }).select("_id");
-    const chatIds = userChats.map((chat) => chat._id);
-    console.log("User's chat IDs:", chatIds);
+    //     const userChats = await Chat.find({ users: userData.userId }).select("_id");
+    //     const chatIds = userChats.map((chat) => chat._id);
+    //     const unseenMessages = await Message.find({
+    //       chat: { $in: chatIds }, // Use found chat IDs
+    //       readBy: { $ne: userData.userId },
+    //     });
 
-    const unseenMessages = await Message.find({
-      chat: { $in: chatIds }, // Use found chat IDs
-      readBy: { $ne: userData.userId },
-    });
+    //     const messageArray = [];
 
-    const messageArray = [];
-
-    unseenMessages.forEach((message) => {
-      message.readBy.push(userData.userId);
-      message.save();
-      messageArray.push(message);
-    });
-    socket.emit("messageReadConfirmation", messageArray);
+    //     unseenMessages.forEach((message) => {
+    //       message.readBy.push(userData.userId);
+    //       message.save();
+    //       messageArray.push(message);
+    //     });
+    //     socket.emit("messageReadConfirmation", messageArray);
 
     io.emit("userOnline", userData);
     socket.emit("connected", userData);
   });
 
-  socket.on("joinChat", (room) => {
+  socket.on("joinChat", async (room) => {
     socket.join(room.chatId);
     console.log("User Joined Room: " + room.chatId);
+
+    if (!userRooms[room.userId]) {
+      userRooms[room.userId] = [];
+    }
+    userRooms[room.userId].push(room.chatId);
+
+    const unseenMessages = await Message.find({
+      chat: room.chatId,
+      readBy: { $ne: room.userId },
+    });
+
+    const messageArray = [];
+
+    unseenMessages.forEach((message) => {
+      message.readBy.push(room.userId);
+      message.save();
+      messageArray.push(message);
+    });
+
+    socket.emit("messageReadConfirmation", messageArray);
     socket.emit("joined", room);
   });
+
   socket.on("typing", (data) => {
     socket.to(data.chatId).emit("typing", data);
   });
+
   socket.on("stopTyping", (data) => {
     socket.to(data.chatId).emit("stopTyping", data);
   });
 
-  socket.on("newMessage", (newMessageRecieved) => {
+  socket.on("newMessage", async (newMessageReceived) => {
     socket
-      .to(newMessageRecieved.chatId)
-      .emit("messageRecieved", newMessageRecieved);
+      .to(newMessageReceived.chatId)
+      .emit("messageRecieved", newMessageReceived);
+    const chat = await Chat.findById(newMessageReceived.chatId);
+    if (!chat) {
+      console.log("Chat not found");
+      return;
+    }
+
+    const latestMessage = await Message.findById(chat.latestMessage);
+
+    if (!latestMessage) {
+      console.log("Latest message not found");
+      return;
+    }
+
+    const messageContent = latestMessage.content;
+    console.log("Latest Message Content:", messageContent);
+
+    const usersToNotify = [];
+    for (const userId of chat.users) {
+      // Check if user has joined the room (using userRooms)
+      const hasJoinedRoom =
+        userRooms[userId] &&
+        userRooms[userId].includes(newMessageReceived.chatId);
+
+      // If the user hasn't joined the room, add them to the usersToNotify array
+      if (!hasJoinedRoom) {
+        usersToNotify.push(userId);
+      }
+    }
+
+    for (const userId of usersToNotify) {
+      try {
+        const recipient = await User.findById(userId);
+
+        if (!recipient) {
+          console.log(`Recipient with ID ${userId} not found`);
+          continue;
+        }
+
+        const receiverToken = recipient.firebase_token;
+
+        if (!receiverToken) {
+          console.log(`No Firebase token found for user ${userId}`);
+          continue;
+        }
+
+        // Send notification using Firebase token
+        const notificationResponse = await sendMessageNotification(
+          receiverToken,
+          recipient.name,
+          newMessageReceived.chatId,
+          recipient.profile_pic || null,
+          chat.chatName || null,
+          chat.group_picture || null,
+          messageContent
+        );
+
+        console.log("Notification Response: ", notificationResponse);
+      } catch (error) {
+        console.log("Error sending notification: ", error);
+      }
+    }
   });
 
   socket.on("messageRead", async (data) => {
@@ -209,6 +292,25 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("setOnline", async (userData) => {
+    if (!onlineUsers.has(userData.userId)) {
+      onlineUsers.set(userData.userId, socket.id);
+      const currentDate = moment();
+      let istDate = currentDate
+        .tz("Asia/Kolkata")
+        .format("YYYY-MM-DDTHH:mm:ss.SSSZ");
+
+      await User.findByIdAndUpdate(
+        userData.userId,
+        { status: "online" },
+        { new: true }
+      );
+
+      console.log(`${userData.userId} is manually set to online`);
+      io.emit("userOnline", userData);
+    }
+  });
+
   socket.off("setup", async (userData) => {
     console.log("USER DISCONNECTED");
     socket.leave(userData.userId);
@@ -222,7 +324,7 @@ io.on("connection", (socket) => {
         { status: istDate },
         { new: true }
       );
-      io.emit("userOffline", userData.userId);
+      io.emit("userOffline", userData);
     }
   });
 });
