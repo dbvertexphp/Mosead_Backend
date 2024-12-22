@@ -6,7 +6,10 @@ const CallHistory = require("../models/callHistoryModel.js");
 const { upload, checkTotalSize } = require("../middleware/uploadMiddleware.js");
 const CryptoJS = require("crypto-js");
 const moment = require("moment-timezone");
-const { sendMessageNotification } = require("../utils/sendNotification");
+const {
+  sendMessageNotification,
+  sendCallNotification,
+} = require("../utils/sendNotification");
 
 const allMessages = asyncHandler(async (req, res) => {
   const userId = req.user._id;
@@ -220,6 +223,43 @@ const saveCallHistory = asyncHandler(async (req, res) => {
   }
 });
 
+const callNotification = asyncHandler(async (req, res) => {
+  const data = req.body;
+  const { userId } = data;
+  try {
+    const user = await User.findById(userId);
+
+    if (!user || !user.firebase_token) {
+      return {
+        success: false,
+        message: "User not found or firebase_token is missing",
+      };
+    }
+
+    const registrationToken = user.firebase_token;
+    const notificationResponse = await sendCallNotification(
+      data,
+      registrationToken
+    );
+
+    // Respond with a success message
+    res.status(200).json({
+      message: "Data received successfully",
+      data: notificationResponse,
+      status: true,
+    });
+  } catch (error) {
+    console.error("Error in callNotification:", error.message);
+
+    // Respond with an error message
+    res.status(500).json({
+      message: "Failed to process notification",
+      error: error.message,
+      status: false,
+    });
+  }
+});
+
 const getAllCallHistoryByUser = asyncHandler(async (req, res) => {
   try {
     const userId = req.user._id;
@@ -227,7 +267,12 @@ const getAllCallHistoryByUser = asyncHandler(async (req, res) => {
     // Fetch call history for the logged-in user
     const callHistories = await CallHistory.find({ sender: userId })
       .populate("sender", "name phone profile_pic")
-      .populate("chat")
+      .populate({
+        path: "chat",
+        populate: {
+          path: "users"
+        },
+      })
       .sort({ createdAt: -1 });
 
     res.status(200).json({
@@ -500,4 +545,5 @@ module.exports = {
   forwardMessage,
   saveCallHistory,
   getAllCallHistoryByUser,
+  callNotification,
 };

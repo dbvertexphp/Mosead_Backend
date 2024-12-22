@@ -76,6 +76,7 @@ const io = require("socket.io")(server, {
 
 const onlineUsers = new Map();
 let userRooms = {};
+const unjoinedMessages = {};
 
 io.on("connection", (socket) => {
   console.log("Connected to socket.io");
@@ -210,6 +211,27 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("messageDelivered", async (data) => {
+    const { messageId, chatId, userId } = data;
+    try {
+      const message = await Message.findById(messageId).populate("chat");
+      if (!message) {
+        console.log("Message not found");
+        return;
+      }
+      message.deliveredTo.push(userId);
+      await message.save();
+      console.log(`Message ${messageId} marked as delivered to user ${userId}`);
+      socket.to(chatId);
+      socket.emit("messageDeliveryStatus", {
+        messageId,
+        deliveredTo: userId,
+      });
+    } catch (error) {
+      console.log("Error in message delivery confirmation:", error.message);
+    }
+  });
+
   socket.on("messageRead", async (data) => {
     console.log("data", data);
     const userIds = data.readBy || data["readBy "] || [];
@@ -272,6 +294,40 @@ io.on("connection", (socket) => {
         "Error in onMessageDeletedForEveryone event: ",
         error.message
       );
+    }
+  });
+
+  socket.on("deleteChatRoom", async (data) => {
+    const { chatId, userId } = data;
+
+    try {
+      // Find the chat by its ID
+      const chat = await Chat.findById(chatId);
+
+      if (!chat) {
+        socket.emit("chatDeletedError", { message: "Chat not found" });
+        return console.log("Chat not found");
+      }
+
+      // Check if the user is part of the chat before deleting
+      if (!chat.users.includes(userId)) {
+        socket.emit("chatDeletedError", {
+          message: "You are not authorized to delete this chat",
+        });
+        return console.log("User not authorized to delete this chat");
+      }
+
+      // Delete the chat
+      // await Chat.findByIdAndDelete(chatId);
+
+      // Notify all users in the chat room that the chat has been deleted
+      io.to(chatId).emit("chatDeleted", data);
+
+      console.log(`Chat ${chatId} deleted successfully by user ${userId}`);
+      socket.emit("chatDeleted", data);
+    } catch (error) {
+      console.log("Error in deleting chat room: ", error.message);
+      socket.emit("chatDeletedError", { message: "Error deleting chat room" });
     }
   });
 

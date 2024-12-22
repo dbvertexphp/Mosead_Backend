@@ -8,7 +8,8 @@ const {
   clearAllMessages,
   forwardMessage,
   saveCallHistory,
-  getAllCallHistoryByUser
+  getAllCallHistoryByUser,
+  callNotification
 } = require("../controllers/messageControllers");
 const { protect } = require("../middleware/authMiddleware");
 
@@ -23,5 +24,7 @@ router.route("/deleteMessageForEveryone").post(protect, deleteMessageForEveryone
 router.route("/clearAllMessages").post(protect, clearAllMessages);
 router.route("/forwardMessage").post(protect, forwardMessage);
 router.route("/getAllCallHistoryByUser").get(protect, getAllCallHistoryByUser);
+router.route("/callNotification").post(callNotification);
+
 
 module.exports = router;

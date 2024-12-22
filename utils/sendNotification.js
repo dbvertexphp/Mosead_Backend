@@ -35,28 +35,26 @@ const sendMessageNotification = async (
   }
 };
 
-const sendCallNotification = async (
-  registrationToken,
-  title,
-  body,
-  imageUrl = null
-) => {
-  const message = {
-    data: {
-      title,
-      body,
-      imageUrl: imageUrl || undefined, // Only include image if it's provided
-    },
-    token: registrationToken,
-  };
+const sendCallNotification = async (data, registrationToken) => {
+      try {
+        // Convert all data fields to strings
+        const formattedData = Object.entries(data).reduce((acc, [key, value]) => {
+          acc[key] = String(value);
+          return acc;
+        }, {});
 
-  try {
-    const response = await admin.messaging().send(message);
-    return { success: true, response };
-  } catch (error) {
-    return { success: false, error };
-  }
-};
+        const message = {
+          data: formattedData,
+          token: registrationToken,
+        };
+
+        const response = await admin.messaging().send(message);
+        return { success: true, response };
+      } catch (error) {
+        console.error("Error sending call notification:", error);
+        return { success: false, error };
+      }
+    };
 
 module.exports = {
   sendMessageNotification,
