@@ -14,12 +14,14 @@ const moment = require("moment-timezone");
 const CryptoJS = require("crypto-js");
 const Chat = require("./models/chatModel.js");
 const { sendMessageNotification } = require("./utils/sendNotification");
+const cors = require('cors');
 
 dotenv.config();
 connectDB();
 const app = express();
+app.use(cors());
 
-app.use(express.json()); // to accept json data
+app.use(express.json());
 
 // app.get("/", (req, res) => {
 //   res.send("API Running!");
@@ -80,6 +82,7 @@ const unjoinedMessages = {};
 
 io.on("connection", (socket) => {
   console.log("Connected to socket.io");
+
   socket.on("setup", async (userData) => {
     socket.join(userData.userId);
     onlineUsers.set(userData.userId, socket.id);
@@ -119,6 +122,21 @@ io.on("connection", (socket) => {
     }
     userRooms[room.userId].push(room.chatId);
 
+    // Fetch the latest message from the chat
+    //     const chat = await Chat.findById(room.chatId).populate("latestMessage");
+    //     if (chat && chat.latestMessage) {
+    //       const decryptedContent = CryptoJS.AES.decrypt(
+    //         chat.latestMessage.content,
+    //         process.env.SECRET_KEY
+    //       ).toString(CryptoJS.enc.Utf8);
+
+    //       // Emit the latest message to the user
+    //       socket.emit("latestMessage", {
+    //         ...chat.latestMessage.toObject(),
+    //         content: decryptedContent
+    //       });
+    //     }
+
     const unseenMessages = await Message.find({
       chat: room.chatId,
       readBy: { $ne: room.userId },
@@ -145,14 +163,20 @@ io.on("connection", (socket) => {
   });
 
   socket.on("newMessage", async (newMessageReceived) => {
-    socket
-      .to(newMessageReceived.chatId)
-      .emit("messageRecieved", newMessageReceived);
     const chat = await Chat.findById(newMessageReceived.chatId);
     if (!chat) {
       console.log("Chat not found");
       return;
     }
+
+    // Update the latest message for the chat
+//     chat.latestMessage = newMessageReceived._id;
+//     await chat.save();
+
+
+    socket
+      .to(newMessageReceived.chatId)
+      .emit("messageRecieved", newMessageReceived);
 
     const latestMessage = await Message.findById(chat.latestMessage);
 

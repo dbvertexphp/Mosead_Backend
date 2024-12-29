@@ -115,6 +115,55 @@ const verifyOtp = asyncHandler(async (req, res) => {
   }
 });
 
+const loginUser = asyncHandler(async (req, res) => {
+  const { phone } = req.body;
+
+  // Validate the phone number
+  if (!phone) {
+    res.status(400);
+    throw new Error("Please provide the phone number");
+  }
+
+  try {
+    // Find user by phone number
+    const user = await User.findOne({ phone });
+
+    // If user is not found, send an error
+    if (!user) {
+      res.status(404);
+      throw new Error("User not found");
+    }
+
+    // Check if the user role is admin
+    if (user.role === "admin") {
+      const authToken = generateToken(user._id, user.role);
+
+      // Set the token in a cookie for 30 days
+      res.setHeader(
+        "Set-Cookie",
+        cookie.serialize("Websitetoken", authToken, {
+          httpOnly: true,
+          expires: new Date(Date.now() + 60 * 60 * 24 * 30 * 1000), // 30 days
+          path: "/",
+        })
+      );
+
+      res.json({
+        user,
+        token: authToken,
+        status: true,
+        message: "Admin login successful",
+      });
+    } else {
+      res.status(400);
+      throw new Error("Unauthorized: Only admin can log in");
+    }
+  } catch (error) {
+    res.status(500);
+    throw new Error(error.message || "Server error");
+  }
+});
+
 const resendOTP = asyncHandler(async (req, res) => {
   const { phone } = req.body;
 
@@ -416,6 +465,40 @@ const getUserDetailsByPhones = asyncHandler(async (req, res) => {
   }
 });
 
+const getAllUsers = asyncHandler(async (req, res) => {
+      const { page = 1, limit = 10, search = "" } = req.query;
+
+      // Convert page and limit to integers
+      const pageNumber = parseInt(page, 10);
+      const limitNumber = parseInt(limit, 10);
+
+      // Create a search query
+      const searchQuery = search
+        ? {
+            $or: [
+              { name: { $regex: search, $options: "i" } },
+            ],
+          }
+        : {};
+
+      // Count total users for pagination
+      const totalUsers = await User.countDocuments(searchQuery);
+
+      // Fetch users with pagination and search
+      const users = await User.find(searchQuery)
+        .skip((pageNumber - 1) * limitNumber)
+        .limit(limitNumber);
+
+      res.status(200).json({
+        status: true,
+        totalUsers,
+        currentPage: pageNumber,
+        totalPages: Math.ceil(totalUsers / limitNumber),
+        users,
+      });
+});
+
+
 module.exports = {
   allUsers,
   registerUser,
@@ -428,4 +511,6 @@ module.exports = {
   getUserDetailsByPhones,
   getUserProfileData,
   getUserDataByCbId,
+  loginUser,
+  getAllUsers
 };

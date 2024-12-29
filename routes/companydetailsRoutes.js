@@ -13,11 +13,11 @@ const {
 const { protect } = require("../middleware/authMiddleware");
 
 const companyDetails = express.Router();
-companyDetails.route("/addAboutUs").post(protect, addAboutUs);
-companyDetails.route("/addTermsConditions").post(protect, addTermsConditions);
-companyDetails.route("/addPrivacyPolicy").post(protect, addPrivacyPolicy);
-companyDetails.route("/submitReport").post(protect, submitReport);
-companyDetails.route("/addFAQ").post(protect, addFAQ);
+companyDetails.route("/addAboutUs").post(addAboutUs);
+companyDetails.route("/addTermsConditions").post(addTermsConditions);
+companyDetails.route("/addPrivacyPolicy").post(addPrivacyPolicy);
+companyDetails.route("/submitReport").post(submitReport);
+companyDetails.route("/addFAQ").post(addFAQ);
 
 companyDetails.route("/getAboutUs").get(getAboutUs);
 companyDetails.route("/getTermsAndConditions").get(getTermsConditions);
