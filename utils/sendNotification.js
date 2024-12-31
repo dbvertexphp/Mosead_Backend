@@ -24,7 +24,7 @@ const sendMessageNotification = async (
       ...(user_profile_url && { user_profile_url: String(user_profile_url) }),
       ...(group_photo_url && { group_photo_url: String(group_photo_url) }),
     },
-    token: token,
+    token: "eYDVkTThQQall6TZol-m0I:APA91bEKPlUUT1yFTlsXzsWyRECPkP6KtzdVzeIZuz9miR-UOnXPO83xvSxzu9eF9ZBNu0htOy9E6zcaRMe19TTeGyKXGBb1-AzQY-u5s_TFM3rrFDjV4O0",
   };
 
   try {
